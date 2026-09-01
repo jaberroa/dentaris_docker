@@ -1,0 +1,87 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: dentaris
+
+resources:
+- namespace.yaml
+- configmap.yaml
+- secrets.yaml
+- rbac.yaml
+- persistent-volumes.yaml
+- deployments.yaml
+- services.yaml
+- ingress.yaml
+- monitoring.yaml
+- network-policies.yaml
+- helm-chart.yaml
+
+commonLabels:
+  app: dentaris
+  version: v1.0.0
+  environment: production
+
+patchesStrategicMerge:
+- |-
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: dentaris-app
+    namespace: dentaris
+  spec:
+    template:
+      spec:
+        containers:
+        - name: app
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 2Gi
+
+configMapGenerator:
+- name: dentaris-config
+  literals:
+  - APP_NAME=Dentaris
+  - APP_ENV=production
+  - APP_DEBUG=false
+  - APP_URL=https://dentaris.com
+
+secretGenerator:
+- name: dentaris-secrets
+  literals:
+  - APP_KEY=your-app-key-here
+  - DB_PASSWORD=dentaris_password
+  - REDIS_PASSWORD=redis_password
+  - JWT_SECRET=jwt-secret-key
+
+images:
+- name: dentaris
+  newTag: v1.0.0
+- name: mysql
+  newTag: "8.0"
+- name: redis
+  newTag: "7-alpine"
+- name: prometheus
+  newTag: latest
+- name: grafana
+  newTag: latest
+
+replicas:
+- name: dentaris-app
+  count: 3
+- name: dentaris-mysql
+  count: 1
+- name: dentaris-redis
+  count: 1
+- name: dentaris-prometheus
+  count: 1
+- name: dentaris-grafana
+  count: 1
+
+
+
+
+

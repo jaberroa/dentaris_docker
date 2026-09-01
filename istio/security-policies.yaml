@@ -1,0 +1,282 @@
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: dentaris-peer-auth
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: peer-authentication
+spec:
+  selector:
+    matchLabels:
+      app: dentaris
+  mtls:
+    mode: STRICT
+---
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: mysql-peer-auth
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: mysql-peer-authentication
+spec:
+  selector:
+    matchLabels:
+      component: mysql
+  mtls:
+    mode: STRICT
+---
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: redis-peer-auth
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: redis-peer-authentication
+spec:
+  selector:
+    matchLabels:
+      component: redis
+  mtls:
+    mode: STRICT
+---
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: monitoring-peer-auth
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: monitoring-peer-authentication
+spec:
+  selector:
+    matchLabels:
+      component: monitoring
+  mtls:
+    mode: PERMISSIVE
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: dentaris-authz-policy
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: authorization-policy
+spec:
+  selector:
+    matchLabels:
+      app: dentaris
+  action: ALLOW
+  rules:
+  # Allow health checks
+  - to:
+    - operation:
+        paths: ["/health"]
+        methods: ["GET"]
+  # Allow API access
+  - to:
+    - operation:
+        paths: ["/api/*"]
+        methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+  # Allow admin access (restricted)
+  - to:
+    - operation:
+        paths: ["/admin/*"]
+        methods: ["GET", "POST", "PUT", "DELETE"]
+    when:
+    - key: source.ip
+      values: ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
+  # Allow static files
+  - to:
+    - operation:
+        paths: ["/*.js", "/*.css", "/*.png", "/*.jpg", "/*.jpeg", "/*.gif", "/*.ico", "/*.svg", "/*.woff", "/*.woff2", "/*.ttf", "/*.eot"]
+        methods: ["GET"]
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: mysql-authz-policy
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: mysql-authorization-policy
+spec:
+  selector:
+    matchLabels:
+      component: mysql
+  action: ALLOW
+  rules:
+  # Allow access from app pods
+  - from:
+    - source:
+        principals: ["cluster.local/ns/dentaris/sa/dentaris-service-account"]
+    to:
+    - operation:
+        ports: ["3306"]
+  # Allow access from monitoring
+  - from:
+    - source:
+        principals: ["cluster.local/ns/istio-system/sa/prometheus"]
+    to:
+    - operation:
+        ports: ["3306"]
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: redis-authz-policy
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: redis-authorization-policy
+spec:
+  selector:
+    matchLabels:
+      component: redis
+  action: ALLOW
+  rules:
+  # Allow access from app pods
+  - from:
+    - source:
+        principals: ["cluster.local/ns/dentaris/sa/dentaris-service-account"]
+    to:
+    - operation:
+        ports: ["6379"]
+  # Allow access from monitoring
+  - from:
+    - source:
+        principals: ["cluster.local/ns/istio-system/sa/prometheus"]
+    to:
+    - operation:
+        ports: ["6379"]
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: monitoring-authz-policy
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: monitoring-authorization-policy
+spec:
+  selector:
+    matchLabels:
+      component: monitoring
+  action: ALLOW
+  rules:
+  # Allow access from monitoring namespace
+  - from:
+    - source:
+        principals: ["cluster.local/ns/istio-system/sa/prometheus"]
+    to:
+    - operation:
+        ports: ["9090", "3000", "16686", "20001"]
+  # Allow access from admin
+  - from:
+    - source:
+        ipBlocks: ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
+    to:
+    - operation:
+        ports: ["9090", "3000", "16686", "20001"]
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: dentaris-deny-policy
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: deny-policy
+spec:
+  selector:
+    matchLabels:
+      app: dentaris
+  action: DENY
+  rules:
+  # Deny access to sensitive paths
+  - to:
+    - operation:
+        paths: ["/storage/*", "/bootstrap/cache/*", "/.env", "/.git/*"]
+  # Deny access from suspicious IPs
+  - from:
+    - source:
+        ipBlocks: ["0.0.0.0/0"]
+    when:
+    - key: source.ip
+      notValues: ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
+  # Deny access to admin without proper headers
+  - to:
+    - operation:
+        paths: ["/admin/*"]
+    when:
+    - key: request.headers[x-admin-token]
+      notValues: ["valid-admin-token"]
+---
+apiVersion: security.istio.io/v1beta1
+kind: RequestAuthentication
+metadata:
+  name: dentaris-request-auth
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: request-authentication
+spec:
+  selector:
+    matchLabels:
+      app: dentaris
+  jwtRules:
+  - issuer: "dentaris.com"
+    jwksUri: "https://dentaris.com/.well-known/jwks.json"
+    audiences: ["dentaris-api"]
+    fromHeaders:
+    - name: "Authorization"
+      prefix: "Bearer "
+    fromParams:
+    - "access_token"
+    forwardOriginalToken: true
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: dentaris-jwt-authz
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: jwt-authorization-policy
+spec:
+  selector:
+    matchLabels:
+      app: dentaris
+  action: ALLOW
+  rules:
+  # Allow API access with valid JWT
+  - to:
+    - operation:
+        paths: ["/api/*"]
+        methods: ["GET", "POST", "PUT", "DELETE"]
+    when:
+    - key: request.auth.claims[iss]
+      values: ["dentaris.com"]
+    - key: request.auth.claims[aud]
+      values: ["dentaris-api"]
+  # Allow admin access with valid JWT and admin role
+  - to:
+    - operation:
+        paths: ["/admin/*"]
+        methods: ["GET", "POST", "PUT", "DELETE"]
+    when:
+    - key: request.auth.claims[iss]
+      values: ["dentaris.com"]
+    - key: request.auth.claims[aud]
+      values: ["dentaris-api"]
+    - key: request.auth.claims[role]
+      values: ["admin", "super-admin"]
+
+
+
+
+

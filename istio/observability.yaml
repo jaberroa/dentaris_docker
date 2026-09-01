@@ -1,0 +1,270 @@
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: dentaris-telemetry
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: telemetry
+spec:
+  selector:
+    matchLabels:
+      app: dentaris
+  metrics:
+  - providers:
+    - name: prometheus
+  - overrides:
+    - match:
+        metric: ALL_METRICS
+      tagOverrides:
+        request_protocol:
+          value: "http"
+        response_code:
+          value: "200"
+        source_service:
+          value: "dentaris"
+        destination_service:
+          value: "dentaris-app-service"
+  tracing:
+  - providers:
+    - name: jaeger
+  - overrides:
+    - match:
+        metric: ALL_METRICS
+      tagOverrides:
+        trace_id:
+          value: "generated"
+        span_id:
+          value: "generated"
+        parent_span_id:
+          value: "inherited"
+        span_name:
+          value: "dentaris-request"
+        span_kind:
+          value: "server"
+        span_status:
+          value: "ok"
+---
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: mysql-telemetry
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: mysql-telemetry
+spec:
+  selector:
+    matchLabels:
+      component: mysql
+  metrics:
+  - providers:
+    - name: prometheus
+  - overrides:
+    - match:
+        metric: ALL_METRICS
+      tagOverrides:
+        request_protocol:
+          value: "tcp"
+        response_code:
+          value: "200"
+        source_service:
+          value: "dentaris"
+        destination_service:
+          value: "mysql-service"
+  tracing:
+  - providers:
+    - name: jaeger
+  - overrides:
+    - match:
+        metric: ALL_METRICS
+      tagOverrides:
+        trace_id:
+          value: "generated"
+        span_id:
+          value: "generated"
+        parent_span_id:
+          value: "inherited"
+        span_name:
+          value: "mysql-query"
+        span_kind:
+          value: "client"
+        span_status:
+          value: "ok"
+---
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: redis-telemetry
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: redis-telemetry
+spec:
+  selector:
+    matchLabels:
+      component: redis
+  metrics:
+  - providers:
+    - name: prometheus
+  - overrides:
+    - match:
+        metric: ALL_METRICS
+      tagOverrides:
+        request_protocol:
+          value: "tcp"
+        response_code:
+          value: "200"
+        source_service:
+          value: "dentaris"
+        destination_service:
+          value: "redis-service"
+  tracing:
+  - providers:
+    - name: jaeger
+  - overrides:
+    - match:
+        metric: ALL_METRICS
+      tagOverrides:
+        trace_id:
+          value: "generated"
+        span_id:
+          value: "generated"
+        parent_span_id:
+          value: "inherited"
+        span_name:
+          value: "redis-operation"
+        span_kind:
+          value: "client"
+        span_status:
+          value: "ok"
+---
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: monitoring-telemetry
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: monitoring-telemetry
+spec:
+  selector:
+    matchLabels:
+      component: monitoring
+  metrics:
+  - providers:
+    - name: prometheus
+  - overrides:
+    - match:
+        metric: ALL_METRICS
+      tagOverrides:
+        request_protocol:
+          value: "http"
+        response_code:
+          value: "200"
+        source_service:
+          value: "dentaris"
+        destination_service:
+          value: "monitoring-service"
+  tracing:
+  - providers:
+    - name: jaeger
+  - overrides:
+    - match:
+        metric: ALL_METRICS
+      tagOverrides:
+        trace_id:
+          value: "generated"
+        span_id:
+          value: "generated"
+        parent_span_id:
+          value: "inherited"
+        span_name:
+          value: "monitoring-request"
+        span_kind:
+          value: "server"
+        span_status:
+          value: "ok"
+---
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: dentaris-access-logging
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: access-logging
+spec:
+  selector:
+    matchLabels:
+      app: dentaris
+  accessLogging:
+  - providers:
+    - name: otel
+  - overrides:
+    - match:
+        metric: ALL_METRICS
+      tagOverrides:
+        log_level:
+          value: "info"
+        log_format:
+          value: "json"
+        log_fields:
+          value: "timestamp,method,path,status,response_time,user_agent,ip"
+---
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: dentaris-error-logging
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: error-logging
+spec:
+  selector:
+    matchLabels:
+      app: dentaris
+  accessLogging:
+  - providers:
+    - name: otel
+  - overrides:
+    - match:
+        metric: ERROR_METRICS
+      tagOverrides:
+        log_level:
+          value: "error"
+        log_format:
+          value: "json"
+        log_fields:
+          value: "timestamp,method,path,status,error_message,stack_trace,user_agent,ip"
+---
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: dentaris-performance-logging
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: performance-logging
+spec:
+  selector:
+    matchLabels:
+      app: dentaris
+  accessLogging:
+  - providers:
+    - name: otel
+  - overrides:
+    - match:
+        metric: PERFORMANCE_METRICS
+      tagOverrides:
+        log_level:
+          value: "warn"
+        log_format:
+          value: "json"
+        log_fields:
+          value: "timestamp,method,path,status,response_time,memory_usage,cpu_usage,user_agent,ip"
+
+
+
+
+

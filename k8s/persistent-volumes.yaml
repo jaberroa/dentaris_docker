@@ -1,0 +1,188 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: dentaris-storage-pv
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: storage
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: dentaris-storage
+  hostPath:
+    path: /var/lib/dentaris/storage
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: dentaris-mysql-pv
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: mysql
+spec:
+  capacity:
+    storage: 20Gi
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: dentaris-mysql
+  hostPath:
+    path: /var/lib/dentaris/mysql
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: dentaris-redis-pv
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: redis
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: dentaris-redis
+  hostPath:
+    path: /var/lib/dentaris/redis
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: dentaris-backup-pv
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: backup
+spec:
+  capacity:
+    storage: 50Gi
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: dentaris-backup
+  hostPath:
+    path: /var/lib/dentaris/backup
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dentaris-storage-pvc
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: storage
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: dentaris-storage
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dentaris-mysql-pvc
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: mysql
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: dentaris-mysql
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dentaris-redis-pvc
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: redis
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: dentaris-redis
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dentaris-backup-pvc
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: backup
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+  storageClassName: dentaris-backup
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: dentaris-storage
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: storage
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: dentaris-mysql
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: mysql
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: dentaris-redis
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: redis
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: dentaris-backup
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: backup
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
+
+
+
+
+

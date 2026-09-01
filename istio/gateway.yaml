@@ -1,0 +1,97 @@
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: dentaris-gateway
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: gateway
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  # HTTP to HTTPS redirect
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - dentaris.com
+    - www.dentaris.com
+    - api.dentaris.com
+    tls:
+      httpsRedirect: true
+  # HTTPS traffic
+  - port:
+      number: 443
+      name: https
+      protocol: HTTPS
+    hosts:
+    - dentaris.com
+    - www.dentaris.com
+    - api.dentaris.com
+    tls:
+      mode: SIMPLE
+      credentialName: dentaris-tls-secret
+  # Monitoring traffic
+  - port:
+      number: 443
+      name: monitoring-https
+      protocol: HTTPS
+    hosts:
+    - monitoring.dentaris.com
+    tls:
+      mode: SIMPLE
+      credentialName: dentaris-tls-secret
+---
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: dentaris-internal-gateway
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: internal-gateway
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  # Internal API traffic
+  - port:
+      number: 8080
+      name: internal-api
+      protocol: HTTP
+    hosts:
+    - internal.dentaris.com
+  # Health check traffic
+  - port:
+      number: 8081
+      name: health-check
+      protocol: HTTP
+    hosts:
+    - health.dentaris.com
+---
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: dentaris-mesh-gateway
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: mesh-gateway
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  # Mesh traffic
+  - port:
+      number: 15443
+      name: mesh
+      protocol: TCP
+    hosts:
+    - mesh.dentaris.com
+
+
+
+
+

@@ -1,0 +1,92 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: dentaris-app-service
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: app
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "80"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 80
+    protocol: TCP
+    name: http
+  - port: 9000
+    targetPort: 9000
+    protocol: TCP
+    name: php-fpm
+  selector:
+    app: dentaris
+    component: app
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-service
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: mysql
+spec:
+  type: ClusterIP
+  ports:
+  - port: 3306
+    targetPort: 3306
+    protocol: TCP
+    name: mysql
+  selector:
+    app: dentaris
+    component: mysql
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: redis
+spec:
+  type: ClusterIP
+  ports:
+  - port: 6379
+    targetPort: 6379
+    protocol: TCP
+    name: redis
+  selector:
+    app: dentaris
+    component: redis
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dentaris-monitoring-service
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: monitoring
+spec:
+  type: ClusterIP
+  ports:
+  - port: 9090
+    targetPort: 9090
+    protocol: TCP
+    name: prometheus
+  - port: 3000
+    targetPort: 3000
+    protocol: TCP
+    name: grafana
+  selector:
+    app: dentaris
+    component: monitoring
+
+
+
+
+

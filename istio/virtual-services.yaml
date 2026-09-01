@@ -1,0 +1,334 @@
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: dentaris-main-vs
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: virtual-service
+spec:
+  hosts:
+  - dentaris.com
+  - www.dentaris.com
+  gateways:
+  - dentaris-gateway
+  http:
+  # Root path
+  - match:
+    - uri:
+        exact: /
+    route:
+    - destination:
+        host: dentaris-app-service
+        port:
+          number: 80
+    timeout: 30s
+    retries:
+      attempts: 3
+      perTryTimeout: 10s
+  # API routes
+  - match:
+    - uri:
+        prefix: /api/
+    route:
+    - destination:
+        host: dentaris-app-service
+        port:
+          number: 80
+    timeout: 60s
+    retries:
+      attempts: 3
+      perTryTimeout: 20s
+    fault:
+      delay:
+        percentage:
+          value: 0.1
+        fixedDelay: 5s
+  # Admin routes
+  - match:
+    - uri:
+        prefix: /admin/
+    route:
+    - destination:
+        host: dentaris-app-service
+        port:
+          number: 80
+    timeout: 30s
+    retries:
+      attempts: 2
+      perTryTimeout: 15s
+  # Health check
+  - match:
+    - uri:
+        exact: /health
+    route:
+    - destination:
+        host: dentaris-app-service
+        port:
+          number: 80
+    timeout: 5s
+    retries:
+      attempts: 1
+      perTryTimeout: 3s
+  # Static files
+  - match:
+    - uri:
+        regex: ".*\\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$"
+    route:
+    - destination:
+        host: dentaris-app-service
+        port:
+          number: 80
+    timeout: 10s
+    retries:
+      attempts: 2
+      perTryTimeout: 5s
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: dentaris-api-vs
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: api-virtual-service
+spec:
+  hosts:
+  - api.dentaris.com
+  gateways:
+  - dentaris-gateway
+  http:
+  # API v1
+  - match:
+    - uri:
+        prefix: /api/v1/
+    route:
+    - destination:
+        host: dentaris-app-service
+        port:
+          number: 80
+    timeout: 30s
+    retries:
+      attempts: 3
+      perTryTimeout: 10s
+    headers:
+      request:
+        add:
+          x-api-version: "v1"
+  # API v2
+  - match:
+    - uri:
+        prefix: /api/v2/
+    route:
+    - destination:
+        host: dentaris-app-service
+        port:
+          number: 80
+    timeout: 30s
+    retries:
+      attempts: 3
+      perTryTimeout: 10s
+    headers:
+      request:
+        add:
+          x-api-version: "v2"
+  # WebSocket support
+  - match:
+    - headers:
+        upgrade:
+          exact: websocket
+    route:
+    - destination:
+        host: dentaris-app-service
+        port:
+          number: 80
+    timeout: 300s
+    retries:
+      attempts: 1
+      perTryTimeout: 300s
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: dentaris-monitoring-vs
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: monitoring-virtual-service
+spec:
+  hosts:
+  - monitoring.dentaris.com
+  gateways:
+  - dentaris-gateway
+  http:
+  # Prometheus
+  - match:
+    - uri:
+        prefix: /prometheus/
+    rewrite:
+      uri: /
+    route:
+    - destination:
+        host: prometheus
+        port:
+          number: 9090
+    timeout: 30s
+    retries:
+      attempts: 2
+      perTryTimeout: 15s
+  # Grafana
+  - match:
+    - uri:
+        prefix: /grafana/
+    rewrite:
+      uri: /
+    route:
+    - destination:
+        host: grafana
+        port:
+          number: 3000
+    timeout: 30s
+    retries:
+      attempts: 2
+      perTryTimeout: 15s
+  # Jaeger
+  - match:
+    - uri:
+        prefix: /jaeger/
+    rewrite:
+      uri: /
+    route:
+    - destination:
+        host: jaeger
+        port:
+          number: 16686
+    timeout: 30s
+    retries:
+      attempts: 2
+      perTryTimeout: 15s
+  # Kiali
+  - match:
+    - uri:
+        prefix: /kiali/
+    rewrite:
+      uri: /
+    route:
+    - destination:
+        host: kiali
+        port:
+          number: 20001
+    timeout: 30s
+    retries:
+      attempts: 2
+      perTryTimeout: 15s
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: dentaris-internal-vs
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: internal-virtual-service
+spec:
+  hosts:
+  - internal.dentaris.com
+  gateways:
+  - dentaris-internal-gateway
+  http:
+  # Internal API
+  - match:
+    - uri:
+        prefix: /internal/
+    route:
+    - destination:
+        host: dentaris-app-service
+        port:
+          number: 80
+    timeout: 30s
+    retries:
+      attempts: 3
+      perTryTimeout: 10s
+    headers:
+      request:
+        add:
+          x-internal: "true"
+  # Database health
+  - match:
+    - uri:
+        exact: /db-health
+    route:
+    - destination:
+        host: mysql-service
+        port:
+          number: 3306
+    timeout: 10s
+    retries:
+      attempts: 1
+      perTryTimeout: 5s
+  # Cache health
+  - match:
+    - uri:
+        exact: /cache-health
+    route:
+    - destination:
+        host: redis-service
+        port:
+          number: 6379
+    timeout: 10s
+    retries:
+      attempts: 1
+      perTryTimeout: 5s
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: dentaris-canary-vs
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: canary-virtual-service
+spec:
+  hosts:
+  - canary.dentaris.com
+  gateways:
+  - dentaris-gateway
+  http:
+  # Canary deployment (10% traffic)
+  - match:
+    - headers:
+        canary:
+          exact: "true"
+    route:
+    - destination:
+        host: dentaris-app-service
+        subset: canary
+        port:
+          number: 80
+    timeout: 30s
+    retries:
+      attempts: 2
+      perTryTimeout: 15s
+  # Production deployment (90% traffic)
+  - route:
+    - destination:
+        host: dentaris-app-service
+        subset: production
+        port:
+          number: 80
+      weight: 90
+    - destination:
+        host: dentaris-app-service
+        subset: canary
+        port:
+          number: 80
+      weight: 10
+    timeout: 30s
+    retries:
+      attempts: 3
+      perTryTimeout: 10s
+
+
+
+
+

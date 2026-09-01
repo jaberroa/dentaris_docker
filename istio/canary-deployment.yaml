@@ -1,0 +1,132 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: dentaris-canary-rollout
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: canary-rollout
+spec:
+  replicas: 3
+  strategy:
+    canary:
+      steps:
+      - setWeight: 10
+      - pause: {duration: 10m}
+      - setWeight: 20
+      - pause: {duration: 10m}
+      - setWeight: 50
+      - pause: {duration: 10m}
+      - setWeight: 80
+      - pause: {duration: 10m}
+      - setWeight: 100
+      analysis:
+        templates:
+        - templateName: success-rate
+        args:
+        - name: service-name
+          value: dentaris-app-service
+        - name: service-namespace
+          value: dentaris
+        - name: interval
+          value: 5m
+        - name: failure-limit
+          value: 3
+        - name: inconclusive-limit
+          value: 3
+        - name: success-limit
+          value: 3
+        - name: failure-condition
+          value: result[0] < 0.95
+        - name: inconclusive-condition
+          value: result[0] < 0.98
+        - name: success-condition
+          value: result[0] >= 0.98
+        startingStep: 2
+        successfulHistoryLimit: 3
+        unsuccessfulHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: dentaris
+      component: app
+  template:
+    metadata:
+      labels:
+        app: dentaris
+        component: app
+        version: v1.1.0
+    spec:
+      containers:
+      - name: app
+        image: dentaris:v1.1.0
+        ports:
+        - containerPort: 80
+        env:
+        - name: APP_ENV
+          value: "production"
+        - name: APP_DEBUG
+          value: "false"
+        - name: CANARY_VERSION
+          value: "v1.1.0"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 1Gi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: success-rate
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: analysis-template
+spec:
+  args:
+  - name: service-name
+  - name: service-namespace
+  - name: interval
+  - name: failure-limit
+  - name: inconclusive-limit
+  - name: success-limit
+  - name: failure-condition
+  - name: inconclusive-condition
+  - name: success-condition
+  metrics:
+  - name: success-rate
+    successCondition: '{{.Values.success-condition}}'
+    failureCondition: '{{.Values.failure-condition}}'
+    inconclusiveCondition: '{{.Values.inconclusive-condition}}'
+    provider:
+      prometheus:
+        address: http://prometheus:9090
+        query: |
+          sum(rate(istio_requests_total{
+            destination_service_name="{{.Values.service-name}}",
+            destination_service_namespace="{{.Values.service-namespace}}",
+            response_code!~"5.."
+          }[{{.Values.interval}}])) /
+          sum(rate(istio_requests_total{
+            destination_service_name="{{.Values.service-name}}",
+            destination_service_namespace="{{.Values.service-namespace}}"
+          }[{{.Values.interval}}]))
+
+
+
+
+

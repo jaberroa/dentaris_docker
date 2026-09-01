@@ -1,0 +1,178 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dentaris-network-policy
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app: dentaris
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow ingress from ingress controller
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 80
+    - protocol: TCP
+      port: 9000
+  # Allow ingress from monitoring
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 80
+  # Allow ingress from same namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: dentaris
+    ports:
+    - protocol: TCP
+      port: 80
+    - protocol: TCP
+      port: 9000
+  egress:
+  # Allow egress to MySQL
+  - to:
+    - podSelector:
+        matchLabels:
+          component: mysql
+    ports:
+    - protocol: TCP
+      port: 3306
+  # Allow egress to Redis
+  - to:
+    - podSelector:
+        matchLabels:
+          component: redis
+    ports:
+    - protocol: TCP
+      port: 6379
+  # Allow egress to monitoring
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9090
+    - protocol: TCP
+      port: 3000
+  # Allow DNS resolution
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow HTTPS for external services
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+  # Allow HTTP for external services
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mysql-network-policy
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: mysql-network-policy
+spec:
+  podSelector:
+    matchLabels:
+      component: mysql
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow ingress from app pods
+  - from:
+    - podSelector:
+        matchLabels:
+          component: app
+    ports:
+    - protocol: TCP
+      port: 3306
+  # Allow ingress from monitoring
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 3306
+  egress:
+  # Allow DNS resolution
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-network-policy
+  namespace: dentaris
+  labels:
+    app: dentaris
+    component: redis-network-policy
+spec:
+  podSelector:
+    matchLabels:
+      component: redis
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow ingress from app pods
+  - from:
+    - podSelector:
+        matchLabels:
+          component: app
+    ports:
+    - protocol: TCP
+      port: 6379
+  # Allow ingress from monitoring
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 6379
+  egress:
+  # Allow DNS resolution
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+
+
+
+
+
