@@ -1,0 +1,86 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: dentaris-app
+    container_name: dentaris-app
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www
+      - ./docker/php/local.ini:/usr/local/etc/php/conf.d/local.ini
+    networks:
+      - dentaris-network
+    depends_on:
+      - db
+      - redis
+
+  nginx:
+    image: nginx:alpine
+    container_name: dentaris-nginx
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./:/var/www
+      - ./docker/nginx/conf.d/:/etc/nginx/conf.d/
+    networks:
+      - dentaris-network
+    depends_on:
+      - app
+
+  db:
+    image: mysql:8.0
+    container_name: dentaris-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: dentaris
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_USER: dentaris
+      MYSQL_PASSWORD: dentaris
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./docker/mysql/my.cnf:/etc/mysql/my.cnf
+    ports:
+      - "3306:3306"
+    networks:
+      - dentaris-network
+
+  redis:
+    image: redis:alpine
+    container_name: dentaris-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - dentaris-network
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: dentaris-phpmyadmin
+    restart: unless-stopped
+    environment:
+      PMA_HOST: db
+      PMA_PORT: 3306
+      PMA_USER: root
+      PMA_PASSWORD: root
+    ports:
+      - "8081:80"
+    networks:
+      - dentaris-network
+    depends_on:
+      - db
+
+volumes:
+  db_data:
+    driver: local
+
+networks:
+  dentaris-network:
+    driver: bridge
+
+
+
+
+

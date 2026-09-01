@@ -1,0 +1,262 @@
+/* Estilos personalizados para Toast notifications */
+
+.toast {
+    border: none;
+    border-radius: 0.5rem;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    min-width: 240px;
+    max-width: 280px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.toast-header {
+    border-radius: 0.5rem 0.5rem 0 0;
+    padding: 0.6rem 0.8rem;
+    background-color: #38c66c !important;
+    border-bottom: none;
+    display: flex;
+    align-items: center;
+}
+
+.toast-header.success {
+    background-color: #28a745 !important;
+}
+
+.toast-header.error {
+    background-color: #dc3545 !important;
+}
+
+.toast-header.warning {
+    background-color: #ffc107 !important;
+    color: #212529 !important;
+}
+
+.toast-header.info {
+    background-color: #17a2b8 !important;
+}
+
+.toast-body {
+    border-radius: 0 0 0.5rem 0.5rem;
+    padding: 0.6rem 0.8rem;
+    background-color: #f8f9fa;
+}
+
+.toast-container {
+    animation: bounceIn 0.8s ease-out;
+    z-index: 1055;
+}
+
+/* Animaciones */
+@keyframes bounceIn {
+    0% {
+        transform: scale(0.3) translateY(-50px);
+        opacity: 0;
+    }
+    50% {
+        transform: scale(1.05) translateY(0);
+        opacity: 0.8;
+    }
+    70% {
+        transform: scale(0.95) translateY(0);
+        opacity: 0.9;
+    }
+    100% {
+        transform: scale(1) translateY(0);
+        opacity: 1;
+    }
+}
+
+.toast.fade-out {
+    animation: fadeOut 0.5s ease-out forwards;
+}
+
+@keyframes fadeOut {
+    from { 
+        opacity: 1; 
+        transform: scale(1); 
+    }
+    to { 
+        opacity: 0; 
+        transform: scale(0.9); 
+    }
+}
+
+/* Avatar styles */
+.avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #fff;
+    background-color: #6c757d;
+}
+
+.avatar-xs {
+    width: 1rem;
+    height: 1rem;
+    font-size: 0.625rem;
+}
+
+.avatar-sm {
+    width: 1.5rem;
+    height: 1.5rem;
+    font-size: 0.75rem;
+}
+
+.avatar-label-light {
+    background-color: rgba(255, 255, 255, 0.2);
+    color: #fff;
+}
+
+.avatar-label-success {
+    background-color: #28a745;
+}
+
+.avatar-label-danger {
+    background-color: #dc3545;
+}
+
+.avatar-label-warning {
+    background-color: #ffc107;
+    color: #212529;
+}
+
+.avatar-label-info {
+    background-color: #17a2b8;
+}
+
+/* Icon styles */
+.fs-12 {
+    font-size: 0.75rem;
+}
+
+/* Responsive design */
+@media (max-width: 576px) {
+    .toast { 
+        min-width: 224px; 
+        max-width: 256px; 
+        font-size: 0.875rem;
+    }
+    
+    .toast-container { 
+        top: 1rem !important; 
+        right: 1rem !important; 
+        left: 1rem !important;
+    }
+    
+    .toast-header {
+        padding: 0.5rem 0.6rem;
+    }
+    
+    .toast-body {
+        padding: 0.5rem 0.6rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .toast {
+        min-width: 200px;
+        max-width: 220px;
+    }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    .toast-body {
+        background-color: #2d3748;
+        color: #e2e8f0;
+    }
+    
+    .toast-header {
+        color: #fff !important;
+    }
+    
+    .toast-header.warning {
+        color: #212529 !important;
+    }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+    .toast {
+        border: 2px solid #000;
+    }
+    
+    .toast-header {
+        border-bottom: 2px solid #000;
+    }
+    
+    .toast-body {
+        border-top: 1px solid #000;
+    }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    .toast-container {
+        animation: none;
+    }
+    
+    .toast.fade-out {
+        animation: none;
+        opacity: 0;
+    }
+    
+    @keyframes bounceIn {
+        from {
+            opacity: 0;
+        }
+        to {
+            opacity: 1;
+        }
+    }
+    
+    @keyframes fadeOut {
+        from {
+            opacity: 1;
+        }
+        to {
+            opacity: 0;
+        }
+    }
+}
+
+/* Print styles */
+@media print {
+    .toast-container {
+        display: none !important;
+    }
+}
+
+/* Focus styles for accessibility */
+.toast:focus {
+    outline: 2px solid #0d6efd;
+    outline-offset: 2px;
+}
+
+.toast-header .btn-close:focus {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+}
+
+/* Custom toast variants */
+.toast-appointment {
+    border-left: 4px solid #0d6efd;
+}
+
+.toast-patient {
+    border-left: 4px solid #28a745;
+}
+
+.toast-payment {
+    border-left: 4px solid #ffc107;
+}
+
+.toast-system {
+    border-left: 4px solid #6c757d;
+}
+

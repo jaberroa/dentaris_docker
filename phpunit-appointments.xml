@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+         processIsolation="false"
+         stopOnFailure="false"
+         cacheDirectory=".phpunit.cache"
+         executionOrder="depends,defects"
+         requireCoverageMetadata="true"
+         beStrictAboutCoverageMetadata="true"
+         beStrictAboutOutputDuringTests="true"
+         failOnRisky="true"
+         failOnWarning="true">
+    
+    <testsuites>
+        <testsuite name="Appointment Module Tests">
+            <directory suffix="Test.php">./tests/Unit</directory>
+            <directory suffix="Test.php">./tests/Feature</directory>
+            <exclude>./tests/Unit/PatientTest.php</exclude>
+            <exclude>./tests/Feature/PatientTest.php</exclude>
+            <exclude>./tests/Feature/PatientApiTest.php</exclude>
+        </testsuite>
+    </testsuites>
+    
+    <source>
+        <include>
+            <directory suffix=".php">./app/Models/Appointment.php</directory>
+            <directory suffix=".php">./app/Models/AppointmentStatus.php</directory>
+            <directory suffix=".php">./app/Http/Controllers/AppointmentController.php</directory>
+            <directory suffix=".php">./app/Http/Controllers/Api/AppointmentApiController.php</directory>
+        </include>
+        <exclude>
+            <directory>./app/Models/Patient.php</directory>
+            <directory>./app/Models/Staff.php</directory>
+            <directory>./app/Models/User.php</directory>
+            <directory>./app/Http/Controllers/PatientController.php</directory>
+            <directory>./app/Http/Controllers/StaffController.php</directory>
+        </exclude>
+    </source>
+    
+    <php>
+        <env name="APP_ENV" value="testing"/>
+        <env name="APP_KEY" value="base64:YourAppKeyHere"/>
+        <env name="BCRYPT_ROUNDS" value="4"/>
+        <env name="CACHE_DRIVER" value="array"/>
+        <env name="DB_CONNECTION" value="mysql"/>
+        <env name="DB_DATABASE" value="dentaris"/>
+        <env name="DB_HOST" value="127.0.0.1"/>
+        <env name="DB_PORT" value="3306"/>
+        <env name="DB_USERNAME" value="dentaris"/>
+        <env name="DB_PASSWORD" value="dentaris"/>
+        <env name="MAIL_MAILER" value="array"/>
+        <env name="PULSE_ENABLED" value="false"/>
+        <env name="QUEUE_CONNECTION" value="sync"/>
+        <env name="SESSION_DRIVER" value="array"/>
+        <env name="TELESCOPE_ENABLED" value="false"/>
+    </php>
+    
+    <coverage>
+        <report>
+            <html outputDirectory="coverage/appointments"/>
+            <xml outputFile="coverage/appointments/coverage.xml"/>
+            <text outputFile="coverage/appointments/coverage.txt"/>
+        </report>
+        <include>
+            <directory suffix=".php">./app/Models/Appointment.php</directory>
+            <directory suffix=".php">./app/Models/AppointmentStatus.php</directory>
+            <directory suffix=".php">./app/Http/Controllers/AppointmentController.php</directory>
+            <directory suffix=".php">./app/Http/Controllers/Api/AppointmentApiController.php</directory>
+        </include>
+        <exclude>
+            <directory>./app/Models/Patient.php</directory>
+            <directory>./app/Models/Staff.php</directory>
+            <directory>./app/Models/User.php</directory>
+            <directory>./app/Http/Controllers/PatientController.php</directory>
+            <directory>./app/Http/Controllers/StaffController.php</directory>
+        </exclude>
+    </coverage>
+    
+    <logging>
+        <junit outputFile="coverage/appointments/junit.xml"/>
+    </logging>
+    
+    <groups>
+        <exclude>
+            <group>slow</group>
+        </exclude>
+    </groups>
+    
+    <extensions>
+        <bootstrap class="Tests\Bootstrap\TestServiceProvider"/>
+    </extensions>
+    
+    <listeners>
+        <listener class="PHPUnit\Util\Logging\TeamCity"/>
+    </listeners>
+    
+    <logging>
+        <teamcity outputFile="coverage/appointments/teamcity.txt"/>
+    </logging>
+    
+    <php>
+        <ini name="memory_limit" value="-1"/>
+        <ini name="max_execution_time" value="300"/>
+    </php>
+    
+    <filter>
+        <whitelist processUncoveredFilesFromWhitelist="true">
+            <directory suffix=".php">./app/Models</directory>
+            <directory suffix=".php">./app/Http/Controllers</directory>
+            <exclude>
+                <directory>./app/Models/Patient.php</directory>
+                <directory>./app/Models/Staff.php</directory>
+                <directory>./app/Models/User.php</directory>
+                <directory>./app/Http/Controllers/PatientController.php</directory>
+                <directory>./app/Http/Controllers/StaffController.php</directory>
+            </exclude>
+        </whitelist>
+    </filter>
+</phpunit>

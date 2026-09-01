@@ -1,0 +1,38 @@
+<?php
+
+namespace App\Http\Middleware;
+
+use Closure;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Symfony\Component\HttpFoundation\Response;
+
+class Authenticate
+{
+    /**
+     * Handle an incoming request.
+     *
+     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
+     */
+    public function handle(Request $request, Closure $next, string ...$guards): Response
+    {
+        $guards = empty($guards) ? [null] : $guards;
+
+        foreach ($guards as $guard) {
+            if (Auth::guard($guard)->check()) {
+                return $next($request);
+            }
+        }
+
+        // Si es una petición AJAX, devolver JSON
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json([
+                'error' => 'Unauthorized',
+                'message' => 'Debes iniciar sesión para acceder a este recurso'
+            ], 401);
+        }
+
+        // Redirigir al login con mensaje específico
+        return redirect()->route('login')->with('error', 'Debes iniciar sesión para acceder a esta página. Usa las credenciales: admin@dentaris.com / password');
+    }
+}

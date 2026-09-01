@@ -1,0 +1,128 @@
+@extends('layouts.master')
+
+@section('title')
+    Radialbar Charts
+@endsection
+
+@section('topbar-title')
+    Apexcharts
+@endsection
+
+@section('css')
+@endsection
+
+@section('content')
+    <div class="row">
+        <div class="col-xl-6">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="card-title mb-0">Simple Radialbar Chart</h4>
+                </div><!-- end card header -->
+
+                <div class="card-body">
+                    <div id="basic_radialbar" data-colors='["--bs-success"]' class="apex-charts" dir="ltr"></div>
+                </div><!-- end card-body -->
+            </div><!-- end card -->
+        </div>
+        <!-- end col -->
+
+        <div class="col-xl-6">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="card-title mb-0">Multiple Radialbar</h4>
+                </div><!-- end card header -->
+
+                <div class="card-body">
+                    <div id="multiple_radialbar"
+                        data-colors='["--bs-primary", "--bs-success", "--bs-warning", "--bs-danger"]' class="apex-charts"
+                        dir="ltr"></div>
+                </div><!-- end card-body -->
+            </div><!-- end card -->
+        </div>
+        <!-- end col -->
+    </div>
+    <!-- end row -->
+
+    <div class="row">
+        <div class="col-xl-6">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="card-title mb-0">Circle Chart - Custom Angle</h4>
+                </div><!-- end card header -->
+
+                <div class="card-body">
+                    <div id="circle_radialbar" data-colors='["--bs-primary", "--bs-info", "--bs-danger", "--bs-success"]'
+                        class="apex-charts" dir="ltr"></div>
+                </div><!-- end card-body -->
+            </div><!-- end card -->
+        </div>
+        <!-- end col -->
+
+        <div class="col-xl-6">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="card-title mb-0">Gradient Circle Chart</h4>
+                </div><!-- end card header -->
+
+                <div class="card-body">
+                    <div id="gradient_radialbar" data-colors='["--bs-success"]' class="apex-charts" dir="ltr"></div>
+                </div><!-- end card-body -->
+            </div><!-- end card -->
+        </div>
+        <!-- end col -->
+    </div>
+    <!-- end row -->
+
+    <div class="row">
+        <div class="col-xl-6">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="card-title mb-0">Stroked Circle Chart</h4>
+                </div><!-- end card header -->
+
+                <div class="card-body">
+                    <div id="stroked_radialbar" data-colors='["--bs-success"]' class="apex-charts" dir="ltr"></div>
+                </div><!-- end card-body -->
+            </div><!-- end card -->
+        </div>
+        <!-- end col -->
+
+        <div class="col-xl-6">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="card-title mb-0">Radialbars with Image</h4>
+                </div><!-- end card header -->
+
+                <div class="card-body">
+                    <div id="radialbar_with_img" data-colors='["--bs-success"]' class="apex-charts" dir="ltr"></div>
+                </div><!-- end card-body -->
+            </div><!-- end card -->
+        </div>
+        <!-- end col -->
+    </div>
+    <!-- end row -->
+
+    <div class="row">
+        <div class="col-xl-6">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="card-title mb-0">Semi Circular Chart</h4>
+                </div><!-- end card header -->
+
+                <div class="card-body">
+                    <div id="semi_radialbar" data-colors='["--bs-primary"]' class="apex-charts" dir="ltr"></div>
+                </div><!-- end card-body -->
+            </div><!-- end card -->
+        </div>
+        <!-- end col -->
+    </div>
+    <!-- end row -->
+@endsection
+
+@section('scripts')
+    <!-- apexcharts -->
+    <script src="{{ URL::asset('build/libs/apexcharts/dist/apexcharts.min.js') }}"></script>
+    <!-- radialbar charts init -->
+    <script src="{{ URL::asset('build/js/pages/apexcharts-radialbar.init.js') }}"></script>
+    <script src="{{ URL::asset('build/js/app.js') }}"></script>
+@endsection

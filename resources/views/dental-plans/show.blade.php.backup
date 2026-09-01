@@ -1,0 +1,4296 @@
+@extends('layouts.master')
+
+@section('title') Plan {{ $plan->plan_code }} @endsection
+
+@section('content')
+    <div class="row">
+        <div class="col-12">
+            <div class="page-title-box d-flex align-items-center justify-content-between">
+                <div>
+                    <h4 class="mb-2">Plan Odontológico</h4>
+                    <p class="text-muted mb-3">{{ $plan->plan_name }} - {{ $plan->patient->getFullNameAttribute() }}</p>
+                </div>
+                <div class="page-title-right">
+                    <div class="d-flex gap-2">
+                        <a href="{{ route('dental-plans.edit', ['dental_plan' => $plan->id]) }}" class="btn btn-outline-warning">
+                            <i class="fas fa-edit me-1"></i>
+                            Editar
+                        </a>
+                        <a href="{{ route('dental-plans.index') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left me-1"></i>
+                            Volver
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- end row -->
+
+    @include('components.success-toast')
+
+    <div class="row g-3">
+        <div class="col-lg-9">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center">
+                        <div class="card-icon"><i class="fas fa-clipboard-list fs-14 text-muted"></i></div>
+                        <h4 class="card-title mb-0">Odontograma (básico)</h4>
+                    </div>
+                    
+                    <!-- Dropdown de Exportación -->
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-outline-primary dropdown-toggle" type="button" id="exportDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fas fa-download me-1"></i>Exportar
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="exportDropdown">
+                            <li>
+                                <a class="dropdown-item" href="#" onclick="exportOdontogramPDF(); return false;">
+                                    <i class="fas fa-file-pdf text-danger me-2"></i>Descargar PDF
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="#" onclick="exportOdontogramImage(); return false;">
+                                    <i class="fas fa-file-image text-primary me-2"></i>Descargar Imagen (PNG)
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item" href="#" onclick="printOdontogram(); return false;">
+                                    <i class="fas fa-print text-secondary me-2"></i>Imprimir
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div class="small text-muted">
+                            Selecciona un diente para agregar un procedimiento. Luego elige una superficie y una plantilla.
+                        </div>
+                        <div class="d-flex align-items-center gap-2 small">
+                            <span class="legend-dot bg-secondary"></span> Diente disponible
+                        </div>
+                    </div>
+
+                    <!-- Odontograma Interactivo Avanzado -->
+                    <div class="odontogram-container">
+                        @php
+                            // Definir dientes según tipo de paciente
+                            $patientType = $plan->patient_type ?? 'adult';
+                            
+                            if ($patientType === 'child') {
+                                // Dientes temporales (20 dientes) - Sistema FDI
+                                $upperRight = ['55','54','53','52','51'];  // Cuadrante 5 (Superior derecho del paciente)
+                                $upperLeft = ['61','62','63','64','65'];   // Cuadrante 6 (Superior izquierdo del paciente)
+                                $lowerRight = ['85','84','83','82','81'];  // Cuadrante 8 (Inferior derecho del paciente)
+                                $lowerLeft = ['71','72','73','74','75'];   // Cuadrante 7 (Inferior izquierdo del paciente)
+                            } elseif ($patientType === 'mixed') {
+                                // Dientes mixtos (temporales + permanentes) - Sistema FDI
+                                $upperRight = ['18','17','16','15','14','13','12','11','55','54','53','52','51'];
+                                $upperLeft = ['61','62','63','64','65','21','22','23','24','25','26','27','28'];
+                                $lowerRight = ['85','84','83','82','81','48','47','46','45','44','43','42','41'];
+                                $lowerLeft = ['71','72','73','74','75','31','32','33','34','35','36','37','38'];
+                            } else {
+                                // Dientes permanentes adultos (32 dientes) - Sistema FDI
+                                // Vista del odontólogo mirando al paciente de frente
+                                $upperRight = ['18','17','16','15','14','13','12','11']; // Cuadrante 1 (Superior derecho del paciente)
+                                $upperLeft = ['21','22','23','24','25','26','27','28'];   // Cuadrante 2 (Superior izquierdo del paciente)
+                                $lowerRight = ['48','47','46','45','44','43','42','41']; // Cuadrante 4 (Inferior derecho del paciente)
+                                $lowerLeft = ['31','32','33','34','35','36','37','38'];   // Cuadrante 3 (Inferior izquierdo del paciente)
+                            }
+                        @endphp
+
+                        <!-- Arcada Superior -->
+                        <div class="jaw-section mb-4">
+                            <div class="jaw-label text-center mb-2">
+                                <small class="text-muted fw-semibold">ARCADA SUPERIOR</small>
+                                <br><small class="text-info">{{ ucfirst($patientType) }} - {{ count($upperRight) + count($upperLeft) }} dientes</small>
+                            </div>
+                            <div class="teeth-row d-flex justify-content-center" style="gap: 0.3rem;">
+                                <!-- Cuadrante Superior Derecho -->
+                                <div class="quadrant d-flex" style="gap: 0.3rem;">
+                                    @foreach($upperRight as $tooth)
+                                        <div class="tooth-container" data-tooth="{{ $tooth }}">
+                                            <div class="tooth-tile interactive-tooth" 
+                                                 data-tooth="{{ $tooth }}" 
+                                                 data-bs-toggle="offcanvas" 
+                                                 data-bs-target="#dentalEvaluationOffcanvas"
+                                                 title="Diente {{ $tooth }} - Click para evaluación completa">
+                                                <div class="tooth-number">{{ $tooth }}</div>
+                                                <div class="tooth-surfaces">
+                                                    <div class="surface surface-occlusal" data-surface="O" title="Oclusal/Incisal"></div>
+                                                    <div class="surface surface-mesial" data-surface="M" title="Mesial"></div>
+                                                    <div class="surface surface-distal" data-surface="D" title="Distal"></div>
+                                                    <div class="surface surface-vestibular" data-surface="V" title="Vestibular"></div>
+                                                    <div class="surface surface-lingual" data-surface="L" title="Lingual/Palatina"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    @endforeach
+                                </div>
+                                
+                                <!-- Línea Media -->
+                                <div class="midline"></div>
+                                
+                                <!-- Cuadrante Superior Izquierdo -->
+                                <div class="quadrant d-flex" style="gap: 0.3rem;">
+                                    @foreach($upperLeft as $tooth)
+                                        <div class="tooth-container" data-tooth="{{ $tooth }}">
+                                            <div class="tooth-tile interactive-tooth" 
+                                                 data-tooth="{{ $tooth }}" 
+                                                 data-bs-toggle="offcanvas" 
+                                                 data-bs-target="#dentalEvaluationOffcanvas"
+                                                 title="Diente {{ $tooth }} - Click para evaluación completa">
+                                                <div class="tooth-number">{{ $tooth }}</div>
+                                                <div class="tooth-surfaces">
+                                                    <div class="surface surface-occlusal" data-surface="O" title="Oclusal/Incisal"></div>
+                                                    <div class="surface surface-mesial" data-surface="M" title="Mesial"></div>
+                                                    <div class="surface surface-distal" data-surface="D" title="Distal"></div>
+                                                    <div class="surface surface-vestibular" data-surface="V" title="Vestibular"></div>
+                                                    <div class="surface surface-lingual" data-surface="L" title="Lingual/Palatina"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Línea de Separación -->
+                        <div class="gum-line mb-4">
+                            <div class="line"></div>
+                        </div>
+
+                        <!-- Arcada Inferior -->
+                        <div class="jaw-section">
+                            <div class="teeth-row d-flex justify-content-center" style="gap: 0.3rem;">
+                                <!-- Cuadrante Inferior Derecho (aparece a la izquierda en pantalla) -->
+                                <div class="quadrant d-flex" style="gap: 0.3rem;">
+                                    @foreach($lowerRight as $tooth)
+                                        <div class="tooth-container" data-tooth="{{ $tooth }}">
+                                            <div class="tooth-tile interactive-tooth" 
+                                                 data-tooth="{{ $tooth }}" 
+                                                 data-bs-toggle="offcanvas" 
+                                                 data-bs-target="#dentalEvaluationOffcanvas"
+                                                 title="Diente {{ $tooth }} - Click para evaluación completa">
+                                                <div class="tooth-number">{{ $tooth }}</div>
+                                                <div class="tooth-surfaces">
+                                                    <div class="surface surface-occlusal" data-surface="O" title="Oclusal/Incisal"></div>
+                                                    <div class="surface surface-mesial" data-surface="M" title="Mesial"></div>
+                                                    <div class="surface surface-distal" data-surface="D" title="Distal"></div>
+                                                    <div class="surface surface-vestibular" data-surface="V" title="Vestibular"></div>
+                                                    <div class="surface surface-lingual" data-surface="L" title="Lingual/Palatina"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    @endforeach
+                                </div>
+                                
+                                <!-- Línea Media -->
+                                <div class="midline"></div>
+                                
+                                <!-- Cuadrante Inferior Izquierdo (aparece a la derecha en pantalla) -->
+                                <div class="quadrant d-flex" style="gap: 0.3rem;">
+                                    @foreach($lowerLeft as $tooth)
+                                        <div class="tooth-container" data-tooth="{{ $tooth }}">
+                                            <div class="tooth-tile interactive-tooth" 
+                                                 data-tooth="{{ $tooth }}" 
+                                                 data-bs-toggle="offcanvas" 
+                                                 data-bs-target="#dentalEvaluationOffcanvas"
+                                                 title="Diente {{ $tooth }} - Click para evaluación completa">
+                                                <div class="tooth-number">{{ $tooth }}</div>
+                                                <div class="tooth-surfaces">
+                                                    <div class="surface surface-occlusal" data-surface="O" title="Oclusal/Incisal"></div>
+                                                    <div class="surface surface-mesial" data-surface="M" title="Mesial"></div>
+                                                    <div class="surface surface-distal" data-surface="D" title="Distal"></div>
+                                                    <div class="surface surface-vestibular" data-surface="V" title="Vestibular"></div>
+                                                    <div class="surface surface-lingual" data-surface="L" title="Lingual/Palatina"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            </div>
+                            <div class="jaw-label text-center mt-2">
+                                <small class="text-muted fw-semibold">ARCADA INFERIOR</small>
+                                <br><small class="text-info">{{ count($lowerLeft) + count($lowerRight) }} dientes</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Leyenda de Condiciones Dentales -->
+                    <div class="condition-legend mt-4">
+                        <h6 class="mb-3 text-center fw-bold">
+                            <i class="fas fa-palette me-2"></i>Leyenda de Condiciones Dentales
+                        </h6>
+                        <div class="row g-2">
+                            <div class="col-6 col-md-3">
+                                <div class="legend-item" data-bs-toggle="tooltip" data-bs-placement="top" 
+                                     title="Diente sin patologías ni tratamientos previos">
+                                    <div class="legend-dot" style="background-color: #27ae60;"></div>
+                                    <span>Sano</span>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="legend-item" data-bs-toggle="tooltip" data-bs-placement="top" 
+                                     title="Lesión cariosa activa que requiere tratamiento">
+                                    <div class="legend-dot" style="background-color: #ff6b35;"></div>
+                                    <span>Caries</span>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="legend-item" data-bs-toggle="tooltip" data-bs-placement="top" 
+                                     title="Restauración con material de obturación (amalgama/resina)">
+                                    <div class="legend-dot" style="background-color: #3498db;"></div>
+                                    <span>Obturación</span>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="legend-item" data-bs-toggle="tooltip" data-bs-placement="top" 
+                                     title="Prótesis fija que cubre completamente el diente">
+                                    <div class="legend-dot" style="background-color: #f39c12;"></div>
+                                    <span>Corona</span>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="legend-item" data-bs-toggle="tooltip" data-bs-placement="top" 
+                                     title="Prótesis fija que reemplaza uno o más dientes">
+                                    <div class="legend-dot" style="background-color: #9b59b6;"></div>
+                                    <span>Puente</span>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="legend-item" data-bs-toggle="tooltip" data-bs-placement="top" 
+                                     title="Raíz artificial de titanio integrada al hueso">
+                                    <div class="legend-dot" style="background-color: #95a5a6;"></div>
+                                    <span>Implante</span>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="legend-item" data-bs-toggle="tooltip" data-bs-placement="top" 
+                                     title="Diente indicado o programado para extracción">
+                                    <div class="legend-dot" style="background-color: #2c3e50;"></div>
+                                    <span>Extracción</span>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="legend-item" data-bs-toggle="tooltip" data-bs-placement="top" 
+                                     title="Tratamiento de conductos (pulpectomía)">
+                                    <div class="legend-dot" style="background-color: #d63031;"></div>
+                                    <span>Endodoncia</span>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="legend-item" data-bs-toggle="tooltip" data-bs-placement="top" 
+                                     title="Espacio edéntulo sin diente presente">
+                                    <div class="legend-dot" style="background-color: #6c757d;"></div>
+                                    <span>Ausente</span>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="legend-item" data-bs-toggle="tooltip" data-bs-placement="top" 
+                                     title="Pérdida de estructura dental por bruxismo o abrasión">
+                                    <div class="legend-dot" style="background-color: #ffc107;"></div>
+                                    <span>Desgaste</span>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="legend-item" data-bs-toggle="tooltip" data-bs-placement="top" 
+                                     title="Reparación previa en proceso o completada">
+                                    <div class="legend-dot" style="background-color: #00b894;"></div>
+                                    <span>Restauración</span>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="legend-item" data-bs-toggle="tooltip" data-bs-placement="top" 
+                                     title="Sellador de fosas y fisuras preventivo">
+                                    <div class="legend-dot" style="background-color: #17a2b8;"></div>
+                                    <span>Sellante</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3">
+            <div class="card">
+                <div class="card-body">
+                    <div class="text-muted">Estado</div>
+                    <span class="badge bg-secondary-subtle text-secondary text-capitalize">{{ str_replace('_', ' ', $plan->status) }}</span>
+                    <div class="text-muted mt-3">Código</div>
+                    <div class="fw-semibold">{{ $plan->plan_code }}</div>
+
+                    <div class="text-muted mt-3">Paciente</div>
+                    <div class="fw-semibold">{{ $plan->patient->first_name ?? 'N/A' }} {{ $plan->patient->last_name ?? '' }}</div>
+
+                    <div class="text-muted mt-3">Profesional</div>
+                    <div class="fw-semibold">{{ $plan->staff->user->name ?? 'N/A' }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Avanzado: Evaluación Dental Completa -->
+    <div class="modal fade" id="advancedDentalModal" tabindex="-1" aria-labelledby="advancedDentalModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="advancedDentalModalLabel">
+                        <i class="fas fa-tooth me-2"></i>Evaluación Dental Completa
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Información del Diente Seleccionado -->
+                    <div class="alert alert-info d-flex align-items-center mb-4">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <div>
+                            <strong>Diente seleccionado:</strong> <span id="selectedToothInfo">Selecciona un diente</span>
+                            <br><small class="text-muted">Superficie: <span id="selectedSurfaceInfo">-</span></small>
+                        </div>
+                    </div>
+
+                    <!-- Pestañas de Navegación -->
+                    <ul class="nav nav-tabs" id="dentalTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="condition-tab" data-bs-toggle="tab" data-bs-target="#condition" type="button" role="tab">
+                                <i class="fas fa-stethoscope me-1"></i>Condición General
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="surfaces-tab" data-bs-toggle="tab" data-bs-target="#surfaces" type="button" role="tab">
+                                <i class="fas fa-layer-group me-1"></i>Superficies
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="treatment-tab" data-bs-toggle="tab" data-bs-target="#treatment" type="button" role="tab">
+                                <i class="fas fa-clipboard-list me-1"></i>Tratamiento
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="advanced-tab" data-bs-toggle="tab" data-bs-target="#advanced" type="button" role="tab">
+                                <i class="fas fa-microscope me-1"></i>Avanzado
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="files-tab" data-bs-toggle="tab" data-bs-target="#files" type="button" role="tab">
+                                <i class="fas fa-paperclip me-1"></i>Archivos
+                            </button>
+                        </li>
+                    </ul>
+
+                    <!-- Contenido de las Pestañas -->
+                    <div class="tab-content" id="dentalTabContent">
+                        <!-- Pestaña 1: Condición General -->
+                        <div class="tab-pane fade show active" id="condition" role="tabpanel">
+                            <div class="row g-3 mt-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">Estado General del Diente</label>
+                                    <div class="condition-selector" id="generalConditionSelector">
+                                        <div class="condition-grid">
+                                            <div class="condition-item" data-condition="healthy" title="Sano">
+                                                <div class="condition-icon">
+                                                    <svg width="40" height="40" viewBox="0 0 40 40">
+                                                        <path d="M20 2 L35 10 L35 30 L20 38 L5 30 L5 10 Z" fill="#27ae60" stroke="#1e8449" stroke-width="1"/>
+                                                    </svg>
+                                                </div>
+                                                <span class="condition-label">Sano</span>
+                                            </div>
+                                            <div class="condition-item" data-condition="caries" title="Caries">
+                                                <div class="condition-icon">
+                                                    <svg width="40" height="40" viewBox="0 0 40 40">
+                                                        <path d="M20 2 L35 10 L35 30 L20 38 L5 30 L5 10 Z" fill="#e74c3c" stroke="#c0392b" stroke-width="1"/>
+                                                        <circle cx="20" cy="20" r="3" fill="#fff"/>
+                                                    </svg>
+                                                </div>
+                                                <span class="condition-label">Caries</span>
+                                            </div>
+                                            <div class="condition-item" data-condition="filling" title="Obturación">
+                                                <div class="condition-icon">
+                                                    <svg width="40" height="40" viewBox="0 0 40 40">
+                                                        <path d="M20 2 L35 10 L35 30 L20 38 L5 30 L5 10 Z" fill="#3498db" stroke="#2980b9" stroke-width="1"/>
+                                                        <rect x="15" y="15" width="10" height="8" fill="#fff" rx="1"/>
+                                                    </svg>
+                                                </div>
+                                                <span class="condition-label">Obturación</span>
+                                            </div>
+                                            <div class="condition-item" data-condition="crown" title="Corona">
+                                                <div class="condition-icon">
+                                                    <svg width="40" height="40" viewBox="0 0 40 40">
+                                                        <path d="M20 2 L35 10 L35 30 L20 38 L5 30 L5 10 Z" fill="#f39c12" stroke="#e67e22" stroke-width="1"/>
+                                                        <path d="M15 15 L25 15 L25 25 L15 25 Z" fill="#fff"/>
+                                                    </svg>
+                                                </div>
+                                                <span class="condition-label">Corona</span>
+                                            </div>
+                                            <div class="condition-item" data-condition="bridge" title="Puente">
+                                                <div class="condition-icon">
+                                                    <svg width="40" height="40" viewBox="0 0 40 40">
+                                                        <path d="M20 2 L35 10 L35 30 L20 38 L5 30 L5 10 Z" fill="#9b59b6" stroke="#8e44ad" stroke-width="1"/>
+                                                        <path d="M10 20 L30 20" stroke="#fff" stroke-width="2"/>
+                                                    </svg>
+                                                </div>
+                                                <span class="condition-label">Puente</span>
+                                            </div>
+                                            <div class="condition-item" data-condition="implant" title="Implante">
+                                                <div class="condition-icon">
+                                                    <svg width="40" height="40" viewBox="0 0 40 40">
+                                                        <path d="M20 2 L35 10 L35 30 L20 38 L5 30 L5 10 Z" fill="#95a5a6" stroke="#7f8c8d" stroke-width="1"/>
+                                                        <path d="M18 25 L22 25 L22 35 L18 35 Z" fill="#fff"/>
+                                                    </svg>
+                                                </div>
+                                                <span class="condition-label">Implante</span>
+                                            </div>
+                                            <div class="condition-item" data-condition="extraction" title="Extracción">
+                                                <div class="condition-icon">
+                                                    <svg width="40" height="40" viewBox="0 0 40 40">
+                                                        <path d="M20 2 L35 10 L35 30 L20 38 L5 30 L5 10 Z" fill="#2c3e50" stroke="#34495e" stroke-width="1"/>
+                                                        <path d="M15 15 L25 15 M15 25 L25 25" stroke="#fff" stroke-width="2"/>
+                                                    </svg>
+                                                </div>
+                                                <span class="condition-label">Extracción</span>
+                                            </div>
+                                            <div class="condition-item" data-condition="root_canal" title="Endodoncia">
+                                                <div class="condition-icon">
+                                                    <svg width="40" height="40" viewBox="0 0 40 40">
+                                                        <path d="M20 2 L35 10 L35 30 L20 38 L5 30 L5 10 Z" fill="#16a085" stroke="#138d75" stroke-width="1"/>
+                                                        <path d="M20 15 L20 25" stroke="#fff" stroke-width="2"/>
+                                                        <circle cx="20" cy="20" r="2" fill="#fff"/>
+                                                    </svg>
+                                                </div>
+                                                <span class="condition-label">Endodoncia</span>
+                                            </div>
+                                            <div class="condition-item" data-condition="missing" title="Ausente">
+                                                <div class="condition-icon">
+                                                    <svg width="40" height="40" viewBox="0 0 40 40">
+                                                        <path d="M20 2 L35 10 L35 30 L20 38 L5 30 L5 10 Z" fill="#bdc3c7" stroke="#95a5a6" stroke-width="1" stroke-dasharray="3,3"/>
+                                                    </svg>
+                                                </div>
+                                                <span class="condition-label">Ausente</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Prioridad</label>
+                                    <select class="form-select" id="priority" name="priority">
+                                        <option value="low">Baja</option>
+                                        <option value="medium" selected>Media</option>
+                                        <option value="high">Alta</option>
+                                        <option value="urgent">Urgente</option>
+                                    </select>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Observaciones Generales</label>
+                                    <textarea class="form-control" id="generalNotes" name="general_notes" rows="3" placeholder="Notas sobre el estado general del diente..."></textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Pestaña 2: Superficies -->
+                        <div class="tab-pane fade" id="surfaces" role="tabpanel">
+                            <div class="row g-3 mt-3">
+                                <div class="col-12">
+                                    <h6 class="mb-3">Condiciones por Superficie</h6>
+                                    <div class="row g-3">
+                                        <!-- Oclusal/Incisal -->
+                                        <div class="col-md-6">
+                                            <label class="form-label">Oclusal/Incisal (O)</label>
+                                            <select class="form-select surface-condition" data-surface="O">
+                                                <option value="">Sin condición</option>
+                                                <option value="caries">Caries</option>
+                                                <option value="filling">Obturación</option>
+                                                <option value="crown">Corona</option>
+                                                <option value="sealant">Sellante</option>
+                                                <option value="wear">Desgaste</option>
+                                                <option value="fractured">Fracturado</option>
+                                            </select>
+                                        </div>
+                                        <!-- Mesial -->
+                                        <div class="col-md-6">
+                                            <label class="form-label">Mesial (M)</label>
+                                            <select class="form-select surface-condition" data-surface="M">
+                                                <option value="">Sin condición</option>
+                                                <option value="caries">Caries</option>
+                                                <option value="filling">Obturación</option>
+                                                <option value="crown">Corona</option>
+                                                <option value="sealant">Sellante</option>
+                                                <option value="wear">Desgaste</option>
+                                                <option value="fractured">Fracturado</option>
+                                            </select>
+                                        </div>
+                                        <!-- Distal -->
+                                        <div class="col-md-6">
+                                            <label class="form-label">Distal (D)</label>
+                                            <select class="form-select surface-condition" data-surface="D">
+                                                <option value="">Sin condición</option>
+                                                <option value="caries">Caries</option>
+                                                <option value="filling">Obturación</option>
+                                                <option value="crown">Corona</option>
+                                                <option value="sealant">Sellante</option>
+                                                <option value="wear">Desgaste</option>
+                                                <option value="fractured">Fracturado</option>
+                                            </select>
+                                        </div>
+                                        <!-- Vestibular -->
+                                        <div class="col-md-6">
+                                            <label class="form-label">Vestibular (V)</label>
+                                            <select class="form-select surface-condition" data-surface="V">
+                                                <option value="">Sin condición</option>
+                                                <option value="caries">Caries</option>
+                                                <option value="filling">Obturación</option>
+                                                <option value="crown">Corona</option>
+                                                <option value="sealant">Sellante</option>
+                                                <option value="wear">Desgaste</option>
+                                                <option value="fractured">Fracturado</option>
+                                            </select>
+                                        </div>
+                                        <!-- Lingual/Palatina -->
+                                        <div class="col-md-6">
+                                            <label class="form-label">Lingual/Palatina (L)</label>
+                                            <select class="form-select surface-condition" data-surface="L">
+                                                <option value="">Sin condición</option>
+                                                <option value="caries">Caries</option>
+                                                <option value="filling">Obturación</option>
+                                                <option value="crown">Corona</option>
+                                                <option value="sealant">Sellante</option>
+                                                <option value="wear">Desgaste</option>
+                                                <option value="fractured">Fracturado</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Pestaña 3: Tratamiento -->
+                        <div class="tab-pane fade" id="treatment" role="tabpanel">
+                            <form method="POST" action="{{ route('dental-plans.procedures.store', ['dental_plan' => $plan->id]) }}" id="treatmentForm">
+                                @csrf
+                                <input type="hidden" name="tooth_number" id="form_tooth_number">
+                                <input type="hidden" name="procedure_type" value="odontogram">
+                                <input type="hidden" name="surface" id="form_surface">
+
+                                <div class="row g-3 mt-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Nombre del Procedimiento</label>
+                                        <input type="text" class="form-control" name="procedure_name" id="procedure_name" required>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Código CDT</label>
+                                        <input type="text" class="form-control" name="procedure_code" id="procedure_code" placeholder="Ej: D2140">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Tiempo Estimado (min)</label>
+                                        <input type="number" class="form-control" name="estimated_time_minutes" id="estimated_time" min="5" step="5">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Costo Estimado ($)</label>
+                                        <input type="number" class="form-control" name="estimated_cost" id="estimated_cost" min="0" step="0.01">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Fecha Programada</label>
+                                        <input type="date" class="form-control" name="scheduled_date" id="scheduled_date">
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label">Plantillas Rápidas</label>
+                                        <div class="d-grid gap-2">
+                                            <div class="row g-2">
+                                                <div class="col-md-4">
+                                                    <button type="button" class="btn btn-outline-danger w-100 template-btn" data-name="Caries" data-code="D2140" data-time="30" data-cost="0">
+                                                        <i class="fas fa-bug me-1"></i>Caries
+                                                    </button>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <button type="button" class="btn btn-outline-warning w-100 template-btn" data-name="Restauración compuesta" data-code="D2391" data-time="45" data-cost="50">
+                                                        <i class="fas fa-tooth me-1"></i>Restauración
+                                                    </button>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <button type="button" class="btn btn-outline-purple w-100 template-btn" data-name="Endodoncia" data-code="D3310" data-time="90" data-cost="150">
+                                                        <i class="fas fa-syringe me-1"></i>Endodoncia
+                                                    </button>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <button type="button" class="btn btn-outline-secondary w-100 template-btn" data-name="Extracción" data-code="D7140" data-time="40" data-cost="80">
+                                                        <i class="fas fa-user-minus me-1"></i>Extracción
+                                                    </button>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <button type="button" class="btn btn-outline-info w-100 template-btn" data-name="Implante" data-code="D6010" data-time="120" data-cost="500">
+                                                        <i class="fas fa-screwdriver-wrench me-1"></i>Implante
+                                                    </button>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <button type="button" class="btn btn-outline-primary w-100 template-btn" data-name="Corona" data-code="D2740" data-time="60" data-cost="200">
+                                                        <i class="fas fa-chess-king me-1"></i>Corona
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label">Notas del Tratamiento</label>
+                                        <textarea class="form-control" name="treatment_notes" rows="3" placeholder="Notas adicionales sobre el tratamiento..."></textarea>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- Pestaña 4: Avanzado -->
+                        <div class="tab-pane fade" id="advanced" role="tabpanel">
+                            <div class="row g-3 mt-3">
+                                <!-- Evaluación de Movilidad -->
+                                <div class="col-md-6">
+                                    <label class="form-label">Movilidad Dental</label>
+                                    <select class="form-select" id="mobility" name="mobility">
+                                        <option value="0">Grado 0 - Sin movilidad</option>
+                                        <option value="1">Grado 1 - Movilidad horizontal < 1mm</option>
+                                        <option value="2">Grado 2 - Movilidad horizontal 1-2mm</option>
+                                        <option value="3">Grado 3 - Movilidad horizontal > 2mm o vertical</option>
+                                    </select>
+                                </div>
+                                
+                                <!-- Sondajes Periodontales -->
+                                <div class="col-md-6">
+                                    <label class="form-label">Profundidad de Sondaje (mm)</label>
+                                    <input type="number" class="form-control" id="pocket_depth" name="pocket_depth" min="0" max="15" step="0.5" placeholder="Ej: 3.5">
+                                </div>
+
+                                <!-- Puntos de Sondaje -->
+                                <div class="col-12">
+                                    <label class="form-label">Puntos de Sondaje Periodontal</label>
+                                    <div class="row g-2">
+                                        <div class="col-md-3">
+                                            <label class="form-label small">Mesial-Vestibular</label>
+                                            <input type="number" class="form-control form-control-sm" name="sondaje_mv" min="0" max="15" step="0.5" placeholder="mm">
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label small">Vestibular</label>
+                                            <input type="number" class="form-control form-control-sm" name="sondaje_v" min="0" max="15" step="0.5" placeholder="mm">
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label small">Distal-Vestibular</label>
+                                            <input type="number" class="form-control form-control-sm" name="sondaje_dv" min="0" max="15" step="0.5" placeholder="mm">
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label small">Lingual/Palatina</label>
+                                            <input type="number" class="form-control form-control-sm" name="sondaje_l" min="0" max="15" step="0.5" placeholder="mm">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Sangrado y Recesión -->
+                                <div class="col-md-6">
+                                    <label class="form-label">Sangrado al Sondaje</label>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="bleeding" name="bleeding">
+                                        <label class="form-check-label" for="bleeding">
+                                            Presente
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Recesión Gingival (mm)</label>
+                                    <input type="number" class="form-control" id="recession" name="recession" min="0" max="10" step="0.5" placeholder="Ej: 2.0">
+                                </div>
+
+                                <!-- Evaluación Radiográfica -->
+                                <div class="col-12">
+                                    <label class="form-label">Evaluación Radiográfica</label>
+                                    <div class="row g-2">
+                                        <div class="col-md-4">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="radiolucency" name="radiolucency">
+                                                <label class="form-check-label" for="radiolucency">
+                                                    Radiolucidez
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="bone_loss" name="bone_loss">
+                                                <label class="form-check-label" for="bone_loss">
+                                                    Pérdida Ósea
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="periapical_lesion" name="periapical_lesion">
+                                                <label class="form-check-label" for="periapical_lesion">
+                                                    Lesión Periapical
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Notas Avanzadas -->
+                                <div class="col-12">
+                                    <label class="form-label">Notas Clínicas Avanzadas</label>
+                                    <textarea class="form-control" id="advanced_notes" name="advanced_notes" rows="4" placeholder="Observaciones detalladas sobre la evaluación clínica..."></textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Pestaña 5: Archivos Adjuntos -->
+                        <div class="tab-pane fade" id="files" role="tabpanel">
+                            <div class="row g-3 mt-3">
+                                <div class="col-12">
+                                    <div class="alert alert-info">
+                                        <i class="fas fa-info-circle me-2"></i>
+                                        <strong>Archivos Clínicos del Diente <span id="filestoothNumber"></span></strong>
+                                        <p class="mb-0 mt-1 small">Adjunta radiografías, recetas, consentimientos informados y otros documentos relacionados con este diente.</p>
+                                    </div>
+                                </div>
+
+                                <!-- Zona de Carga de Archivos -->
+                                <div class="col-12">
+                                    <label class="form-label fw-bold">
+                                        <i class="fas fa-cloud-upload-alt me-2"></i>Subir Nuevos Archivos
+                                    </label>
+                                    <div class="border rounded p-4 text-center bg-light" id="dropZone" style="border-style: dashed !important;">
+                                        <i class="fas fa-file-upload fa-3x text-muted mb-3"></i>
+                                        <p class="mb-2">Arrastra archivos aquí o haz clic en el botón</p>
+                                        <input type="file" id="fileInput" name="files[]" multiple accept="image/*,.pdf,.doc,.docx" class="d-none">
+                                        <button type="button" class="btn btn-sm btn-outline-primary" id="selectFilesBtn">
+                                            <i class="fas fa-folder-open me-1"></i>Seleccionar Archivos
+                                        </button>
+                                        <p class="small text-muted mt-2 mb-0">Formatos: JPG, PNG, PDF, DOC (Máx. 10MB por archivo)</p>
+                                    </div>
+                                </div>
+
+                                <!-- Lista de Archivos Seleccionados -->
+                                <div class="col-12" id="selectedFilesContainer" style="display: none;">
+                                    <label class="form-label fw-bold">Archivos Seleccionados</label>
+                                    <div id="selectedFilesList" class="list-group"></div>
+                                </div>
+
+                                <!-- Archivos Existentes -->
+                                <div class="col-12">
+                                    <label class="form-label fw-bold">
+                                        <i class="fas fa-folder me-2"></i>Archivos Guardados
+                                    </label>
+                                    <div id="existingFilesList" class="list-group">
+                                        <div class="list-group-item text-center text-muted py-4">
+                                            <i class="fas fa-folder-open fa-2x mb-2"></i>
+                                            <p class="mb-0">No hay archivos adjuntos aún</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Tipo de Archivo -->
+                                <div class="col-md-6">
+                                    <label class="form-label">Tipo de Documento</label>
+                                    <select class="form-select" id="file_type" name="file_type">
+                                        <option value="radiography">Radiografía</option>
+                                        <option value="prescription">Receta Médica</option>
+                                        <option value="consent">Consentimiento Informado</option>
+                                        <option value="lab_order">Orden de Laboratorio</option>
+                                        <option value="photo">Fotografía Clínica</option>
+                                        <option value="report">Informe/Reporte</option>
+                                        <option value="other">Otro</option>
+                                    </select>
+                                </div>
+
+                                <!-- Descripción del Archivo -->
+                                <div class="col-md-6">
+                                    <label class="form-label">Descripción</label>
+                                    <input type="text" class="form-control" id="file_description" name="file_description" placeholder="Ej: Radiografía periapical del 18">
+                                </div>
+
+                                <!-- Notas sobre Archivos -->
+                                <div class="col-12">
+                                    <label class="form-label">Notas Adicionales</label>
+                                    <textarea class="form-control" id="file_notes" name="file_notes" rows="2" placeholder="Observaciones sobre los documentos adjuntos..."></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer justify-content-between">
+                    <button type="button" class="btn btn-danger" id="deleteToothEvaluation">
+                        <i class="fas fa-trash-alt me-1"></i>Borrar Condiciones
+                    </button>
+                    <div>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                            <i class="fas fa-times me-1"></i>Cancelar
+                        </button>
+                        <button type="button" class="btn btn-primary" id="saveDentalEvaluation">
+                            <i class="fas fa-save me-1"></i>Guardar Evaluación
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Offcanvas Slide Lateral: Evaluación Dental Completa -->
+    <div class="offcanvas offcanvas-end" tabindex="-1" id="dentalEvaluationOffcanvas" aria-labelledby="dentalEvaluationOffcanvasLabel">
+        <div class="offcanvas-header bg-primary text-white">
+            <h5 class="offcanvas-title" id="dentalEvaluationOffcanvasLabel">
+                <i class="fas fa-tooth me-2"></i>Evaluación Dental Completa
+            </h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        </div>
+        <div class="offcanvas-body p-0">
+            <!-- Información del Diente Seleccionado -->
+            <div class="alert alert-info d-flex align-items-center m-3 mb-0">
+                <i class="fas fa-info-circle me-2"></i>
+                <div>
+                    <strong>Diente seleccionado:</strong> <span id="selectedToothInfoSlide">Selecciona un diente</span>
+                    <br><small class="text-muted">Superficie: <span id="selectedSurfaceInfoSlide">-</span></small>
+                </div>
+            </div>
+
+            <!-- Pestañas de Navegación -->
+            <ul class="nav nav-tabs nav-fill" id="dentalTabsSlide" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="condition-tab-slide" data-bs-toggle="tab" data-bs-target="#condition-slide" type="button" role="tab">
+                        <i class="fas fa-stethoscope me-1"></i>Condición
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="surfaces-tab-slide" data-bs-toggle="tab" data-bs-target="#surfaces-slide" type="button" role="tab">
+                        <i class="fas fa-layer-group me-1"></i>Superficies
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="treatment-tab-slide" data-bs-toggle="tab" data-bs-target="#treatment-slide" type="button" role="tab">
+                        <i class="fas fa-clipboard-list me-1"></i>Tratamiento
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="advanced-tab-slide" data-bs-toggle="tab" data-bs-target="#advanced-slide" type="button" role="tab">
+                        <i class="fas fa-microscope me-1"></i>Avanzado
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="files-tab-slide" data-bs-toggle="tab" data-bs-target="#files-slide" type="button" role="tab">
+                        <i class="fas fa-paperclip me-1"></i>Archivos
+                    </button>
+                </li>
+            </ul>
+
+            <!-- Contenido de las Pestañas -->
+            <div class="tab-content p-3" id="dentalTabContentSlide">
+                <!-- Pestaña 1: Condición General -->
+                <div class="tab-pane fade show active" id="condition-slide" role="tabpanel">
+                    <div class="mb-3">
+                        <label for="generalConditionSlide" class="form-label">Estado General del Diente</label>
+                        <div class="condition-selector" id="generalConditionSelectorSlide">
+                            <div class="condition-grid">
+                                <div class="condition-item" data-condition="healthy" title="Sano">
+                                    <div class="condition-icon">
+                                        <svg width="40" height="40" viewBox="0 0 40 40">
+                                            <path d="M20 2 L35 10 L35 30 L20 38 L5 30 L5 10 Z" fill="#27ae60" stroke="#1e8449" stroke-width="1"/>
+                                        </svg>
+                                    </div>
+                                    <span class="condition-label">Sano</span>
+                                </div>
+                                <div class="condition-item" data-condition="caries" title="Caries">
+                                    <div class="condition-icon">
+                                        <svg width="40" height="40" viewBox="0 0 40 40">
+                                            <path d="M20 2 L35 10 L35 30 L20 38 L5 30 L5 10 Z" fill="#e74c3c" stroke="#c0392b" stroke-width="1"/>
+                                            <circle cx="20" cy="20" r="3" fill="#fff"/>
+                                        </svg>
+                                    </div>
+                                    <span class="condition-label">Caries</span>
+                                </div>
+                                <div class="condition-item" data-condition="filling" title="Obturación">
+                                    <div class="condition-icon">
+                                        <svg width="40" height="40" viewBox="0 0 40 40">
+                                            <path d="M20 2 L35 10 L35 30 L20 38 L5 30 L5 10 Z" fill="#3498db" stroke="#2980b9" stroke-width="1"/>
+                                            <rect x="15" y="15" width="10" height="8" fill="#fff" rx="1"/>
+                                        </svg>
+                                    </div>
+                                    <span class="condition-label">Obturación</span>
+                                </div>
+                                <div class="condition-item" data-condition="crown" title="Corona">
+                                    <div class="condition-icon">
+                                        <svg width="40" height="40" viewBox="0 0 40 40">
+                                            <path d="M20 2 L35 10 L35 30 L20 38 L5 30 L5 10 Z" fill="#f39c12" stroke="#e67e22" stroke-width="1"/>
+                                            <path d="M15 15 L25 15 L25 25 L15 25 Z" fill="#fff"/>
+                                        </svg>
+                                    </div>
+                                    <span class="condition-label">Corona</span>
+                                </div>
+                                <div class="condition-item" data-condition="bridge" title="Puente">
+                                    <div class="condition-icon">
+                                        <svg width="40" height="40" viewBox="0 0 40 40">
+                                            <path d="M20 2 L35 10 L35 30 L20 38 L5 30 L5 10 Z" fill="#9b59b6" stroke="#8e44ad" stroke-width="1"/>
+                                            <path d="M10 20 L30 20" stroke="#fff" stroke-width="2"/>
+                                        </svg>
+                                    </div>
+                                    <span class="condition-label">Puente</span>
+                                </div>
+                                <div class="condition-item" data-condition="implant" title="Implante">
+                                    <div class="condition-icon">
+                                        <svg width="40" height="40" viewBox="0 0 40 40">
+                                            <path d="M20 2 L35 10 L35 30 L20 38 L5 30 L5 10 Z" fill="#95a5a6" stroke="#7f8c8d" stroke-width="1"/>
+                                            <path d="M18 25 L22 25 L22 35 L18 35 Z" fill="#fff"/>
+                                        </svg>
+                                    </div>
+                                    <span class="condition-label">Implante</span>
+                                </div>
+                                <div class="condition-item" data-condition="extraction" title="Extracción">
+                                    <div class="condition-icon">
+                                        <svg width="40" height="40" viewBox="0 0 40 40">
+                                            <path d="M20 2 L35 10 L35 30 L20 38 L5 30 L5 10 Z" fill="#2c3e50" stroke="#34495e" stroke-width="1"/>
+                                            <path d="M15 15 L25 15 M15 25 L25 25" stroke="#fff" stroke-width="2"/>
+                                        </svg>
+                                    </div>
+                                    <span class="condition-label">Extracción</span>
+                                </div>
+                                <div class="condition-item" data-condition="root_canal" title="Endodoncia">
+                                    <div class="condition-icon">
+                                        <svg width="40" height="40" viewBox="0 0 40 40">
+                                            <path d="M20 2 L35 10 L35 30 L20 38 L5 30 L5 10 Z" fill="#16a085" stroke="#138d75" stroke-width="1"/>
+                                            <path d="M20 15 L20 25" stroke="#fff" stroke-width="2"/>
+                                            <circle cx="20" cy="20" r="2" fill="#fff"/>
+                                        </svg>
+                                    </div>
+                                    <span class="condition-label">Endodoncia</span>
+                                </div>
+                                <div class="condition-item" data-condition="missing" title="Ausente">
+                                    <div class="condition-icon">
+                                        <svg width="40" height="40" viewBox="0 0 40 40">
+                                            <path d="M20 2 L35 10 L35 30 L20 38 L5 30 L5 10 Z" fill="#bdc3c7" stroke="#95a5a6" stroke-width="1" stroke-dasharray="3,3"/>
+                                        </svg>
+                                    </div>
+                                    <span class="condition-label">Ausente</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="prioritySlide" class="form-label">Prioridad</label>
+                        <select class="form-select" id="prioritySlide">
+                            <option value="">Seleccionar prioridad...</option>
+                            <option value="low">Baja</option>
+                            <option value="medium">Media</option>
+                            <option value="high">Alta</option>
+                            <option value="urgent">Urgente</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="generalNotesSlide" class="form-label">Observaciones Generales</label>
+                        <textarea class="form-control" id="generalNotesSlide" rows="3" placeholder="Notas adicionales sobre la condición del diente..."></textarea>
+                    </div>
+                </div>
+
+                <!-- Pestaña 2: Superficies -->
+                <div class="tab-pane fade" id="surfaces-slide" role="tabpanel">
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label class="form-label">Oclusal (O)</label>
+                            <select class="form-select surface-condition" data-surface="occlusal" id="surface-occlusal-slide">
+                                <option value="">Sin condición</option>
+                                <option value="caries">Caries</option>
+                                <option value="filling">Obturación</option>
+                                <option value="crown">Corona</option>
+                            </select>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label class="form-label">Mesial (M)</label>
+                            <select class="form-select surface-condition" data-surface="mesial" id="surface-mesial-slide">
+                                <option value="">Sin condición</option>
+                                <option value="caries">Caries</option>
+                                <option value="filling">Obturación</option>
+                                <option value="crown">Corona</option>
+                            </select>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label class="form-label">Distal (D)</label>
+                            <select class="form-select surface-condition" data-surface="distal" id="surface-distal-slide">
+                                <option value="">Sin condición</option>
+                                <option value="caries">Caries</option>
+                                <option value="filling">Obturación</option>
+                                <option value="crown">Corona</option>
+                            </select>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label class="form-label">Vestibular (V)</label>
+                            <select class="form-select surface-condition" data-surface="vestibular" id="surface-vestibular-slide">
+                                <option value="">Sin condición</option>
+                                <option value="caries">Caries</option>
+                                <option value="filling">Obturación</option>
+                                <option value="crown">Corona</option>
+                            </select>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label class="form-label">Lingual (L)</label>
+                            <select class="form-select surface-condition" data-surface="lingual" id="surface-lingual-slide">
+                                <option value="">Sin condición</option>
+                                <option value="caries">Caries</option>
+                                <option value="filling">Obturación</option>
+                                <option value="crown">Corona</option>
+                            </select>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label class="form-label">Incisal (I)</label>
+                            <select class="form-select surface-condition" data-surface="incisal" id="surface-incisal-slide">
+                                <option value="">Sin condición</option>
+                                <option value="caries">Caries</option>
+                                <option value="filling">Obturación</option>
+                                <option value="crown">Corona</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pestaña 3: Tratamiento -->
+                <div class="tab-pane fade" id="treatment-slide" role="tabpanel">
+                    <div class="mb-3">
+                        <label for="procedure_nameSlide" class="form-label">Nombre del Procedimiento</label>
+                        <input type="text" class="form-control" id="procedure_nameSlide" placeholder="Ej: Obturación de amalgama">
+                    </div>
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label for="cdt_codeSlide" class="form-label">Código CDT</label>
+                            <input type="text" class="form-control" id="cdt_codeSlide" placeholder="Ej: D2140">
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label for="estimated_timeSlide" class="form-label">Tiempo Estimado (min)</label>
+                            <input type="number" class="form-control" id="estimated_timeSlide" placeholder="30">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label for="estimated_costSlide" class="form-label">Costo Estimado</label>
+                            <input type="number" class="form-control" id="estimated_costSlide" placeholder="150.00" step="0.01">
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label for="scheduled_dateSlide" class="form-label">Fecha Programada</label>
+                            <input type="date" class="form-control" id="scheduled_dateSlide">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="treatment_notesSlide" class="form-label">Notas del Tratamiento</label>
+                        <textarea class="form-control" id="treatment_notesSlide" rows="3" placeholder="Detalles del procedimiento..."></textarea>
+                    </div>
+                </div>
+
+                <!-- Pestaña 4: Avanzado -->
+                <div class="tab-pane fade" id="advanced-slide" role="tabpanel">
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label for="mobilitySlide" class="form-label">Movilidad</label>
+                            <select class="form-select" id="mobilitySlide">
+                                <option value="">Sin movilidad</option>
+                                <option value="1">Grado 1</option>
+                                <option value="2">Grado 2</option>
+                                <option value="3">Grado 3</option>
+                            </select>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label for="pocket_depthSlide" class="form-label">Profundidad de Sondaje</label>
+                            <input type="text" class="form-control" id="pocket_depthSlide" placeholder="Ej: 2-3mm">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="bleedingSlide">
+                                <label class="form-check-label" for="bleedingSlide">Sangrado al sondaje</label>
+                            </div>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label for="recessionSlide" class="form-label">Recesión Gingival (mm)</label>
+                            <input type="number" class="form-control" id="recessionSlide" step="0.1">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="radiolucencySlide">
+                                <label class="form-check-label" for="radiolucencySlide">Radiolucidez</label>
+                            </div>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="bone_lossSlide">
+                                <label class="form-check-label" for="bone_lossSlide">Pérdida ósea</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="periapical_lesionSlide">
+                            <label class="form-check-label" for="periapical_lesionSlide">Lesión periapical</label>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="advanced_notesSlide" class="form-label">Notas Avanzadas</label>
+                        <textarea class="form-control" id="advanced_notesSlide" rows="3" placeholder="Observaciones adicionales..."></textarea>
+                    </div>
+                </div>
+
+                <!-- Pestaña 5: Archivos -->
+                <div class="tab-pane fade" id="files-slide" role="tabpanel">
+                    <div class="mb-3">
+                        <label class="form-label">Subir Archivos</label>
+                        <div class="border border-2 border-dashed rounded p-4 text-center" id="dropZoneSlide">
+                            <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                            <p class="mb-2">Arrastra archivos aquí o haz clic para seleccionar</p>
+                            <button type="button" class="btn btn-outline-primary" id="selectFilesBtnSlide">
+                                <i class="fas fa-folder-open me-1"></i>Seleccionar Archivos
+                            </button>
+                            <input type="file" class="d-none" id="fileInputSlide" multiple accept="image/*,.pdf,.doc,.docx">
+                        </div>
+                    </div>
+                    <div id="selectedFilesContainerSlide" class="mb-3"></div>
+                    <div id="existingFilesContainerSlide" class="mb-3"></div>
+                </div>
+            </div>
+        </div>
+        <div class="offcanvas-footer bg-light border-top p-3">
+            <div class="d-flex justify-content-between">
+                <button type="button" class="btn btn-danger" id="deleteToothEvaluationSlide">
+                    <i class="fas fa-trash-alt me-1"></i>Borrar Condiciones
+                </button>
+                <div>
+                    <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="offcanvas">
+                        <i class="fas fa-times me-1"></i>Cancelar
+                    </button>
+                    <button type="button" class="btn btn-primary" id="saveDentalEvaluationSlide">
+                        <i class="fas fa-save me-1"></i>Guardar Evaluación
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+@endsection
+
+@section('css')
+<style>
+/* Odontograma Interactivo Avanzado */
+.odontogram-container {
+    /* background: #f8f9fa; */
+    border-radius: 1rem;
+    padding: 3rem;
+    border: 2px solid #e9ecef;
+    overflow-x: auto;
+    min-width: 100%;
+}
+
+.jaw-section {
+    position: relative;
+}
+
+.jaw-label {
+    font-size: 0.75rem;
+    letter-spacing: 0.5px;
+    color: #6c757d;
+}
+
+.teeth-row {
+    align-items: center;
+}
+
+.quadrant {
+    align-items: center;
+}
+
+.midline {
+    width: 2px;
+    height: 60px;
+    background: linear-gradient(to bottom, #dee2e6, #adb5bd);
+    margin: 0 1rem;
+    border-radius: 1px;
+}
+
+.gum-line {
+    display: flex;
+    justify-content: center;
+}
+
+.gum-line .line {
+    width: 80%;
+    height: 2px;
+    background: linear-gradient(to right, #dee2e6, #adb5bd, #dee2e6);
+    border-radius: 1px;
+}
+
+/* Contenedor de Diente */
+.tooth-container {
+    position: relative;
+    margin: 0;
+}
+
+.interactive-tooth {
+    position: relative;
+    width: 45px;
+    height: 55px;
+    /* background: #ffffff; */
+    /* border: 2px solid #dee2e6; */
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+/* SVG de fondo por diente específico (raíz) */
+.interactive-tooth[data-tooth="18"]::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url('/images/teeth/adult/18C.svg');
+    background-size: 100% 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* SVG superior del diente (corona/parte superior) */
+.tooth-container[data-tooth="18"]::before {
+    content: '';
+    position: absolute;
+    top: -60px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 45px;
+    height: 60px;
+    background-image: url('/images/teeth/adult/18D.svg');
+    background-size: contain;
+    background-position: center bottom;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+    filter: none;
+    transition: filter 0.3s ease;
+}
+
+/* Sombra verde para 18u cuando el diente tiene condición */
+.tooth-container[data-tooth="18"].has-condition::before {
+    filter: drop-shadow(0 4px 8px rgba(56, 198, 108, 0.5));
+}
+
+/* SVG de fondo para diente 17 (raíz) */
+.interactive-tooth[data-tooth="17"]::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url('/images/teeth/adult/17C.svg');
+    background-size: 100% 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* SVG superior del diente 17 (corona/parte superior) */
+.tooth-container[data-tooth="17"]::before {
+    content: '';
+    position: absolute;
+    top: -65px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 45px;
+    height: 65px;
+    background-image: url('/images/teeth/adult/17D.svg');
+    background-size: contain;
+    background-position: center bottom;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+    filter: none;
+    transition: filter 0.3s ease;
+}
+
+/* Sombra verde para 17U cuando el diente tiene condición */
+.tooth-container[data-tooth="17"].has-condition::before {
+    filter: drop-shadow(0 4px 8px rgba(56, 198, 108, 0.5));
+}
+
+/* SVG de fondo para diente 16 (raíz) */
+.interactive-tooth[data-tooth="16"]::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url('/images/teeth/adult/16C.svg');
+    background-size: 100% 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* SVG superior del diente 16 (corona/parte superior) */
+.tooth-container[data-tooth="16"]::before {
+    content: '';
+    position: absolute;
+    top: -70px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 45px;
+    height: 70px;
+    background-image: url('/images/teeth/adult/16D.svg');
+    background-size: contain;
+    background-position: center bottom;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+    filter: none;
+    transition: filter 0.3s ease;
+}
+
+/* Sombra verde para 16U cuando el diente tiene condición */
+.tooth-container[data-tooth="16"].has-condition::before {
+    filter: drop-shadow(0 4px 8px rgba(56, 198, 108, 0.5));
+}
+
+/* SVG de fondo para diente 15 (raíz) */
+.interactive-tooth[data-tooth="15"]::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url('/images/teeth/adult/15C.svg');
+    background-size: 100% 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* SVG superior del diente 15 (corona/parte superior) */
+.tooth-container[data-tooth="15"]::before {
+    content: '';
+    position: absolute;
+    top: -80px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 45px;
+    height: 80px;
+    background-image: url('/images/teeth/adult/15D.svg');
+    background-size: contain;
+    background-position: center bottom;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+    filter: none;
+    transition: filter 0.3s ease;
+}
+
+/* Sombra verde para 15C cuando el diente tiene condición */
+.tooth-container[data-tooth="15"].has-condition::before {
+    filter: drop-shadow(0 4px 8px rgba(56, 198, 108, 0.5));
+}
+
+/* SVG de fondo para diente 14 (raíz) */
+.interactive-tooth[data-tooth="14"]::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url('/images/teeth/adult/14C.svg');
+    background-size: 100% 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* SVG superior del diente 14 (corona/parte superior) */
+.tooth-container[data-tooth="14"]::before {
+    content: '';
+    position: absolute;
+    top: -83px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 45px;
+    height: 83px;
+    background-image: url('/images/teeth/adult/14D.svg');
+    background-size: contain;
+    background-position: center bottom;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+    filter: none;
+    transition: filter 0.3s ease;
+}
+
+/* Sombra verde para 14C cuando el diente tiene condición */
+.tooth-container[data-tooth="14"].has-condition::before {
+    filter: drop-shadow(0 4px 8px rgba(56, 198, 108, 0.5));
+}
+
+/* SVG de fondo para diente 13 (raíz) */
+.interactive-tooth[data-tooth="13"]::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url('/images/teeth/adult/13C.svg');
+    background-size: 100% 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* SVG superior del diente 13 (corona/parte superior) */
+.tooth-container[data-tooth="13"]::before {
+    content: '';
+    position: absolute;
+    top: -84px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 45px;
+    height: 84px;
+    background-image: url('/images/teeth/adult/13D.svg');
+    background-size: contain;
+    background-position: center bottom;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+    filter: none;
+    transition: filter 0.3s ease;
+}
+
+/* Sombra verde para 13C cuando el diente tiene condición */
+.tooth-container[data-tooth="13"].has-condition::before {
+    filter: drop-shadow(0 4px 8px rgba(56, 198, 108, 0.5));
+}
+
+/* SVG de fondo para diente 12 (raíz) */
+.interactive-tooth[data-tooth="12"]::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url('/images/teeth/adult/12C.svg');
+    background-size: 100% 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* SVG superior del diente 12 (corona/parte superior) */
+.tooth-container[data-tooth="12"]::before {
+    content: '';
+    position: absolute;
+    top: -70px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 45px;
+    height: 70px;
+    background-image: url('/images/teeth/adult/12D.svg');
+    background-size: contain;
+    background-position: center bottom;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+    filter: none;
+    transition: filter 0.3s ease;
+}
+
+/* Sombra verde para 12C cuando el diente tiene condición */
+.tooth-container[data-tooth="12"].has-condition::before {
+    filter: drop-shadow(0 4px 8px rgba(56, 198, 108, 0.5));
+}
+
+/* SVG de fondo para diente 11 (raíz) */
+.interactive-tooth[data-tooth="11"]::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url('/images/teeth/adult/11C.svg');
+    background-size: 100% 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* SVG superior del diente 11 (corona/parte superior) */
+.tooth-container[data-tooth="11"]::before {
+    content: '';
+    position: absolute;
+    top: -84px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 45px;
+    height: 84px;
+    background-image: url('/images/teeth/adult/11D.svg');
+    background-size: contain;
+    background-position: center bottom;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+    filter: none;
+    transition: filter 0.3s ease;
+}
+
+/* Sombra verde para 11C cuando el diente tiene condición */
+.tooth-container[data-tooth="11"].has-condition::before {
+    filter: drop-shadow(0 4px 8px rgba(56, 198, 108, 0.5));
+}
+
+/* SVG de fondo para diente 21 (raíz) */
+.interactive-tooth[data-tooth="21"]::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url('/images/teeth/adult/21C.svg');
+    background-size: 100% 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* SVG superior del diente 21 (corona/parte superior) */
+.tooth-container[data-tooth="21"]::before {
+    content: '';
+    position: absolute;
+    top: -80px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 45px;
+    height: 80px;
+    background-image: url('/images/teeth/adult/21D.svg');
+    background-size: contain;
+    background-position: center bottom;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+    filter: none;
+    transition: filter 0.3s ease;
+}
+
+/* Sombra verde para 21D cuando el diente tiene condición */
+.tooth-container[data-tooth="21"].has-condition::before {
+    filter: drop-shadow(0 4px 8px rgba(56, 198, 108, 0.5));
+}
+
+/* SVG de fondo para diente 22 (raíz) */
+.interactive-tooth[data-tooth="22"]::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url('/images/teeth/adult/22C.svg');
+    background-size: 100% 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* SVG superior del diente 22 (corona/parte superior) */
+.tooth-container[data-tooth="22"]::before {
+    content: '';
+    position: absolute;
+    top: -70px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 45px;
+    height: 70px;
+    background-image: url('/images/teeth/adult/22D.svg');
+    background-size: contain;
+    background-position: center bottom;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+    filter: none;
+    transition: filter 0.3s ease;
+}
+
+/* Sombra verde para 22D cuando el diente tiene condición */
+.tooth-container[data-tooth="22"].has-condition::before {
+    filter: drop-shadow(0 4px 8px rgba(56, 198, 108, 0.5));
+}
+
+/* SVG de fondo para diente 23 (raíz) */
+.interactive-tooth[data-tooth="23"]::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url('/images/teeth/adult/23C.svg');
+    background-size: 100% 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* SVG superior del diente 23 (corona/parte superior) */
+.tooth-container[data-tooth="23"]::before {
+    content: '';
+    position: absolute;
+    top: -85px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 45px;
+    height: 85px;
+    background-image: url('/images/teeth/adult/23D.svg');
+    background-size: contain;
+    background-position: center bottom;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+    filter: none;
+    transition: filter 0.3s ease;
+}
+
+/* Sombra verde para 23D cuando el diente tiene condición */
+.tooth-container[data-tooth="23"].has-condition::before {
+    filter: drop-shadow(0 4px 8px rgba(56, 198, 108, 0.5));
+}
+
+/* SVG de fondo para diente 24 (raíz) */
+.interactive-tooth[data-tooth="24"]::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url('/images/teeth/adult/24C.svg');
+    background-size: 100% 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* SVG superior del diente 24 (corona/parte superior) */
+.tooth-container[data-tooth="24"]::before {
+    content: '';
+    position: absolute;
+    top: -83px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 45px;
+    height: 83px;
+    background-image: url('/images/teeth/adult/24D.svg');
+    background-size: contain;
+    background-position: center bottom;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+    filter: none;
+    transition: filter 0.3s ease;
+}
+
+/* Sombra verde para 24D cuando el diente tiene condición */
+.tooth-container[data-tooth="24"].has-condition::before {
+    filter: drop-shadow(0 4px 8px rgba(56, 198, 108, 0.5));
+}
+
+/* SVG de fondo para diente 25 (raíz) */
+.interactive-tooth[data-tooth="25"]::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url('/images/teeth/adult/25C.svg');
+    background-size: 100% 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* SVG superior del diente 25 (corona/parte superior) */
+.tooth-container[data-tooth="25"]::before {
+    content: '';
+    position: absolute;
+    top: -80px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 45px;
+    height: 80px;
+    background-image: url('/images/teeth/adult/25D.svg');
+    background-size: contain;
+    background-position: center bottom;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+    filter: none;
+    transition: filter 0.3s ease;
+}
+
+/* Sombra verde para 25D cuando el diente tiene condición */
+.tooth-container[data-tooth="25"].has-condition::before {
+    filter: drop-shadow(0 4px 8px rgba(56, 198, 108, 0.5));
+}
+
+/* SVG de fondo para diente 26 (raíz) */
+.interactive-tooth[data-tooth="26"]::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url('/images/teeth/adult/26C.svg');
+    background-size: 100% 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* SVG superior del diente 26 (corona/parte superior) */
+.tooth-container[data-tooth="26"]::before {
+    content: '';
+    position: absolute;
+    top: -80px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 45px;
+    height: 80px;
+    background-image: url('/images/teeth/adult/26D.svg');
+    background-size: contain;
+    background-position: center bottom;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+    filter: none;
+    transition: filter 0.3s ease;
+}
+
+/* Sombra verde para 26D cuando el diente tiene condición */
+.tooth-container[data-tooth="26"].has-condition::before {
+    filter: drop-shadow(0 4px 8px rgba(56, 198, 108, 0.5));
+}
+
+/* SVG de fondo para diente 27 (raíz) */
+.interactive-tooth[data-tooth="27"]::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url('/images/teeth/adult/27C.svg');
+    background-size: 100% 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* SVG superior del diente 27 (corona/parte superior) */
+.tooth-container[data-tooth="27"]::before {
+    content: '';
+    position: absolute;
+    top: -80px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 45px;
+    height: 80px;
+    background-image: url('/images/teeth/adult/27D.svg');
+    background-size: contain;
+    background-position: center bottom;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+    filter: none;
+    transition: filter 0.3s ease;
+}
+
+/* Sombra verde para 27D cuando el diente tiene condición */
+.tooth-container[data-tooth="27"].has-condition::before {
+    filter: drop-shadow(0 4px 8px rgba(56, 198, 108, 0.5));
+}
+
+/* SVG de fondo para diente 28 (raíz) */
+.interactive-tooth[data-tooth="28"]::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url('/images/teeth/adult/28C.svg');
+    background-size: 100% 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* SVG superior del diente 28 (corona/parte superior) */
+.tooth-container[data-tooth="28"]::before {
+    content: '';
+    position: absolute;
+    top: -80px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 45px;
+    height: 80px;
+    background-image: url('/images/teeth/adult/28D.svg');
+    background-size: contain;
+    background-position: center bottom;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+    filter: none;
+    transition: filter 0.3s ease;
+}
+
+/* Sombra verde para 28D cuando el diente tiene condición */
+.tooth-container[data-tooth="28"].has-condition::before {
+    filter: drop-shadow(0 4px 8px rgba(56, 198, 108, 0.5));
+}
+
+/* SVG de fondo para diente 48 (raíz) */
+.interactive-tooth[data-tooth="48"]::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url('/images/teeth/adult/48C.svg');
+    background-size: 100% 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* SVG superior del diente 48 (corona/parte superior) */
+.tooth-container[data-tooth="48"]::before {
+    content: '';
+    position: absolute;
+    top: 55px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 45px;
+    height: 80px;
+    background-image: url('/images/teeth/adult/48D.svg');
+    background-size: contain;
+    background-position: center bottom;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+    filter: none;
+    transition: filter 0.3s ease;
+}
+
+/* Sombra verde para 48D cuando el diente tiene condición */
+.tooth-container[data-tooth="48"].has-condition::before {
+    filter: drop-shadow(0 4px 8px rgba(56, 198, 108, 0.5));
+}
+
+/* SVG de fondo para diente 47 (raíz) */
+.interactive-tooth[data-tooth="47"]::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url('/images/teeth/adult/47C.svg');
+    background-size: 100% 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* SVG superior del diente 47 (corona/parte superior) */
+.tooth-container[data-tooth="47"]::before {
+    content: '';
+    position: absolute;
+    top: 55px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 45px;
+    height: 80px;
+    background-image: url('/images/teeth/adult/47D.svg');
+    background-size: contain;
+    background-position: center bottom;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+    filter: none;
+    transition: filter 0.3s ease;
+}
+
+/* Sombra verde para 47D cuando el diente tiene condición */
+.tooth-container[data-tooth="47"].has-condition::before {
+    filter: drop-shadow(0 4px 8px rgba(56, 198, 108, 0.5));
+}
+
+/* SVG de fondo para diente 46 (raíz) */
+.interactive-tooth[data-tooth="46"]::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url('/images/teeth/adult/46C.svg');
+    background-size: 100% 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* SVG superior del diente 46 (corona/parte superior) */
+.tooth-container[data-tooth="46"]::before {
+    content: '';
+    position: absolute;
+    top: 55px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 45px;
+    height: 80px;
+    background-image: url('/images/teeth/adult/46D.svg');
+    background-size: contain;
+    background-position: center bottom;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+    filter: none;
+    transition: filter 0.3s ease;
+}
+
+/* Sombra verde para 46D cuando el diente tiene condición */
+.tooth-container[data-tooth="46"].has-condition::before {
+    filter: drop-shadow(0 4px 8px rgba(56, 198, 108, 0.5));
+}
+
+/* SVG de fondo para diente 45 (raíz) */
+.interactive-tooth[data-tooth="45"]::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url('/images/teeth/adult/45C.svg');
+    background-size: 100% 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* SVG superior del diente 45 (corona/parte superior) */
+.tooth-container[data-tooth="45"]::before {
+    content: '';
+    position: absolute;
+    top: 55px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 45px;
+    height: 80px;
+    background-image: url('/images/teeth/adult/45D.svg');
+    background-size: contain;
+    background-position: center bottom;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+    filter: none;
+    transition: filter 0.3s ease;
+}
+
+/* Sombra verde para 45D cuando el diente tiene condición */
+.tooth-container[data-tooth="45"].has-condition::before {
+    filter: drop-shadow(0 4px 8px rgba(56, 198, 108, 0.5));
+}
+
+/* SVG de fondo para diente 44 (raíz) */
+.interactive-tooth[data-tooth="44"]::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url('/images/teeth/adult/44C.svg');
+    background-size: 100% 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* SVG superior del diente 44 (corona/parte superior) */
+.tooth-container[data-tooth="44"]::before {
+    content: '';
+    position: absolute;
+    top: 55px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 45px;
+    height: 80px;
+    background-image: url('/images/teeth/adult/44D.svg');
+    background-size: contain;
+    background-position: center bottom;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+    filter: none;
+    transition: filter 0.3s ease;
+}
+
+/* Sombra verde para 44D cuando el diente tiene condición */
+.tooth-container[data-tooth="44"].has-condition::before {
+    filter: drop-shadow(0 4px 8px rgba(56, 198, 108, 0.5));
+}
+
+/* SVG de fondo para diente 43 (raíz) */
+.interactive-tooth[data-tooth="43"]::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url('/images/teeth/adult/43C.svg');
+    background-size: 100% 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* SVG superior del diente 43 (corona/parte superior) */
+.tooth-container[data-tooth="43"]::before {
+    content: '';
+    position: absolute;
+    top: 55px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 45px;
+    height: 80px;
+    background-image: url('/images/teeth/adult/43D.svg');
+    background-size: contain;
+    background-position: center bottom;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+    filter: none;
+    transition: filter 0.3s ease;
+}
+
+/* Sombra verde para 43D cuando el diente tiene condición */
+.tooth-container[data-tooth="43"].has-condition::before {
+    filter: drop-shadow(0 4px 8px rgba(56, 198, 108, 0.5));
+}
+
+/* SVG de fondo para diente 42 (raíz) */
+.interactive-tooth[data-tooth="42"]::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url('/images/teeth/adult/42C.svg');
+    background-size: 100% 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* SVG superior del diente 42 (corona/parte superior) */
+.tooth-container[data-tooth="42"]::before {
+    content: '';
+    position: absolute;
+    top: 55px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 45px;
+    height: 80px;
+    background-image: url('/images/teeth/adult/42D.svg');
+    background-size: contain;
+    background-position: center bottom;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+    filter: none;
+    transition: filter 0.3s ease;
+}
+
+/* Sombra verde para 42D cuando el diente tiene condición */
+.tooth-container[data-tooth="42"].has-condition::before {
+    filter: drop-shadow(0 4px 8px rgba(56, 198, 108, 0.5));
+}
+
+/* SVG de fondo para diente 41 (raíz) */
+.interactive-tooth[data-tooth="41"]::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url('/images/teeth/adult/41C.svg');
+    background-size: 100% 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* SVG superior del diente 41 (corona/parte superior) */
+.tooth-container[data-tooth="41"]::before {
+    content: '';
+    position: absolute;
+    top: 55px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 45px;
+    height: 80px;
+    background-image: url('/images/teeth/adult/41D.svg');
+    background-size: contain;
+    background-position: center bottom;
+    background-repeat: no-repeat;
+    opacity: 0.6;
+    z-index: 1;
+    pointer-events: none;
+    filter: none;
+    transition: filter 0.3s ease;
+}
+
+/* Sombra verde para 41D cuando el diente tiene condición */
+.tooth-container[data-tooth="41"].has-condition::before {
+    filter: drop-shadow(0 4px 8px rgba(56, 198, 108, 0.5));
+}
+
+.interactive-tooth:hover {
+    border-color: #38c66c;
+    box-shadow: 0 4px 12px rgba(56, 198, 108, 0.4);
+    transform: translateY(-2px);
+}
+
+/* Número del Diente */
+.tooth-number {
+    position: relative;
+    z-index: 10;
+    font-weight: 600;
+    font-size: 11px;
+    color: #495057;
+    padding: 2px 6px;
+}
+
+/* Superficies del Diente */
+.tooth-surfaces {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    z-index: 5;
+}
+
+.surface {
+    position: absolute;
+    border: 1px solid transparent;
+    transition: all 0.2s ease;
+    pointer-events: auto;
+    cursor: pointer;
+    z-index: 6;
+}
+
+.surface:hover {
+    background-color: rgba(13, 110, 253, 0.1);
+    border-color: #0d6efd;
+}
+
+/* Posicionamiento de Superficies */
+.surface-vestibular {
+    top: 2px;
+    left: 8px;
+    right: 8px;
+    height: 8px;
+    border-radius: 2px;
+}
+
+/* SVG de Implante - Solo en dientes que terminan en D (corona) */
+.tooth-container[data-tooth="18"].has-implante::after,
+.tooth-container[data-tooth="17"].has-implante::after,
+.tooth-container[data-tooth="16"].has-implante::after,
+.tooth-container[data-tooth="15"].has-implante::after,
+.tooth-container[data-tooth="14"].has-implante::after,
+.tooth-container[data-tooth="13"].has-implante::after,
+.tooth-container[data-tooth="12"].has-implante::after,
+.tooth-container[data-tooth="11"].has-implante::after,
+.tooth-container[data-tooth="21"].has-implante::after,
+.tooth-container[data-tooth="22"].has-implante::after,
+.tooth-container[data-tooth="23"].has-implante::after,
+.tooth-container[data-tooth="24"].has-implante::after,
+.tooth-container[data-tooth="25"].has-implante::after,
+.tooth-container[data-tooth="26"].has-implante::after,
+.tooth-container[data-tooth="27"].has-implante::after,
+.tooth-container[data-tooth="28"].has-implante::after,
+.tooth-container[data-tooth="31"].has-implante::after,
+.tooth-container[data-tooth="32"].has-implante::after,
+.tooth-container[data-tooth="33"].has-implante::after,
+.tooth-container[data-tooth="34"].has-implante::after,
+.tooth-container[data-tooth="35"].has-implante::after,
+.tooth-container[data-tooth="36"].has-implante::after,
+.tooth-container[data-tooth="37"].has-implante::after,
+.tooth-container[data-tooth="38"].has-implante::after,
+.tooth-container[data-tooth="41"].has-implante::after,
+.tooth-container[data-tooth="42"].has-implante::after,
+.tooth-container[data-tooth="43"].has-implante::after,
+.tooth-container[data-tooth="44"].has-implante::after,
+.tooth-container[data-tooth="45"].has-implante::after,
+.tooth-container[data-tooth="46"].has-implante::after,
+.tooth-container[data-tooth="47"].has-implante::after,
+.tooth-container[data-tooth="48"].has-implante::after {
+    content: '';
+    position: absolute;
+    top: -70%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 60px;
+    height: 60px;
+    background-image: url('/images/teeth/implants/implant.svg');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    opacity: 0.9;
+    z-index: 15;
+    pointer-events: none;
+}
+
+/* Posición específica para implantes de dientes 48, 47, 46, 45, 44, 43, 42, 41 */
+.tooth-container[data-tooth="48"].has-implante::after,
+.tooth-container[data-tooth="47"].has-implante::after,
+.tooth-container[data-tooth="46"].has-implante::after,
+.tooth-container[data-tooth="45"].has-implante::after,
+.tooth-container[data-tooth="44"].has-implante::after,
+.tooth-container[data-tooth="43"].has-implante::after,
+.tooth-container[data-tooth="42"].has-implante::after,
+.tooth-container[data-tooth="41"].has-implante::after {
+    top: 95px;
+}
+
+/* Posición específica para implantes de dientes 31, 32, 33, 34, 35, 36, 37, 38 */
+.tooth-container[data-tooth="31"].has-implante::after,
+.tooth-container[data-tooth="32"].has-implante::after,
+.tooth-container[data-tooth="33"].has-implante::after,
+.tooth-container[data-tooth="34"].has-implante::after,
+.tooth-container[data-tooth="35"].has-implante::after,
+.tooth-container[data-tooth="36"].has-implante::after,
+.tooth-container[data-tooth="37"].has-implante::after,
+.tooth-container[data-tooth="38"].has-implante::after {
+    top: 95px;
+}
+
+/* Rotación específica para implantes de dientes 18, 17, 16, 15, 14, 13, 12, 11 */
+.tooth-container[data-tooth="18"].has-implante::after,
+.tooth-container[data-tooth="17"].has-implante::after,
+.tooth-container[data-tooth="16"].has-implante::after,
+.tooth-container[data-tooth="15"].has-implante::after,
+.tooth-container[data-tooth="14"].has-implante::after,
+.tooth-container[data-tooth="13"].has-implante::after,
+.tooth-container[data-tooth="12"].has-implante::after,
+.tooth-container[data-tooth="11"].has-implante::after {
+    transform: translate(-50%, -50%) rotate(180deg);
+}
+
+/* Rotación específica para implantes de dientes 21, 22, 23, 24, 25, 26, 27, 28 */
+.tooth-container[data-tooth="21"].has-implante::after,
+.tooth-container[data-tooth="22"].has-implante::after,
+.tooth-container[data-tooth="23"].has-implante::after,
+.tooth-container[data-tooth="24"].has-implante::after,
+.tooth-container[data-tooth="25"].has-implante::after,
+.tooth-container[data-tooth="26"].has-implante::after,
+.tooth-container[data-tooth="27"].has-implante::after,
+.tooth-container[data-tooth="28"].has-implante::after {
+    transform: translate(-50%, -50%) rotate(180deg);
+}
+
+.surface-mesial {
+    top: 12px;
+    left: 2px;
+    width: 8px;
+    height: 30px;
+    border-radius: 2px;
+}
+
+.surface-distal {
+    top: 12px;
+    right: 2px;
+    width: 8px;
+    height: 30px;
+    border-radius: 2px;
+}
+
+.surface-occlusal {
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 18px;
+    height: 18px;
+    border-radius: 3px;
+}
+
+.surface-lingual {
+    bottom: 2px;
+    left: 8px;
+    right: 8px;
+    height: 8px;
+    border-radius: 2px;
+}
+
+/* Estados de Condición Dental */
+.tooth-healthy { background-color: #d1f2eb; border-color: #27ae60; }
+.tooth-caries { background-color: #ffebcd; border-color: #ff6b35; } /* Naranja coral */
+.tooth-filling { background-color: #d6eaf8; border-color: #3498db; }
+.tooth-crown { background-color: #fef9e7; border-color: #f39c12; }
+.tooth-bridge { background-color: #e8daef; border-color: #9b59b6; }
+.tooth-implant { background-color: #eaeded; border-color: #95a5a6; }
+.tooth-extraction { background-color: #2c3e50; border-color: #000000; }
+.tooth-root-canal { background-color: #ffe5e5; border-color: #d63031; } /* Rojo brillante */
+.tooth-missing { background-color: #f8f9fa; border-color: #6c757d; }
+.tooth-fractured { background-color: #fdeaa7; border-color: #f39c12; }
+.tooth-wear { background-color: #fff3cd; border-color: #ffc107; }
+.tooth-restoration { background-color: #e1f5dd; border-color: #00b894; } /* Verde azulado */
+.tooth-sealant { background-color: #d1ecf1; border-color: #17a2b8; }
+.tooth-veneer { background-color: #e2e3e5; border-color: #6f42c1; }
+.tooth-temporary { background-color: #d4edda; border-color: #28a745; }
+.tooth-lesion { background-color: #f5c6cb; border-color: #721c24; }
+
+/* Superficies con Condición */
+.surface-caries { background-color: rgba(255, 107, 53, 0.3); border-color: #ff6b35; } /* Naranja coral */
+.surface-filling { background-color: rgba(52, 152, 219, 0.3); border-color: #3498db; }
+.surface-crown { background-color: rgba(243, 156, 18, 0.3); border-color: #f39c12; }
+.surface-bridge { background-color: rgba(155, 89, 182, 0.3); border-color: #9b59b6; }
+.surface-implant { background-color: rgba(149, 165, 166, 0.3); border-color: #95a5a6; }
+.surface-extraction { background-color: rgba(0, 0, 0, 0.3); border-color: #000000; }
+.surface-root-canal { background-color: rgba(214, 48, 49, 0.3); border-color: #d63031; } /* Rojo brillante */
+.surface-missing { background-color: rgba(108, 117, 125, 0.3); border-color: #6c757d; }
+.surface-fractured { background-color: rgba(243, 156, 18, 0.3); border-color: #f39c12; }
+.surface-wear { background-color: rgba(255, 193, 7, 0.3); border-color: #ffc107; }
+.surface-restoration { background-color: rgba(0, 184, 148, 0.3); border-color: #00b894; } /* Verde azulado */
+.surface-sealant { background-color: rgba(23, 162, 184, 0.3); border-color: #17a2b8; }
+.surface-veneer { background-color: rgba(111, 66, 193, 0.3); border-color: #6f42c1; }
+.surface-temporary { background-color: rgba(40, 167, 69, 0.3); border-color: #28a745; }
+.surface-lesion { background-color: rgba(114, 28, 36, 0.3); border-color: #721c24; }
+
+/* Animaciones */
+@keyframes toothPulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+.tooth-selected {
+    animation: toothPulse 0.6s ease-in-out;
+    border-color: #0d6efd !important;
+    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.25);
+}
+
+/* Tooltips Mejorados */
+.tooth-tooltip {
+    position: absolute;
+    background: #2c3e50;
+    color: white;
+    padding: 0.5rem;
+    border-radius: 0.375rem;
+    font-size: 0.75rem;
+    z-index: 1000;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    white-space: nowrap;
+}
+
+.tooth-tooltip.show {
+    opacity: 1;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .interactive-tooth {
+        width: 40px;
+        height: 50px;
+    }
+    
+    .tooth-number {
+        font-size: 0.65rem;
+    }
+    
+    .surface {
+        border-width: 0.5px;
+    }
+}
+
+@media (max-width: 576px) {
+    .interactive-tooth {
+        width: 35px;
+        height: 45px;
+    }
+    
+    .midline {
+        width: 1px;
+        margin: 0 0.5rem;
+    }
+}
+
+/* Leyenda de Colores */
+.legend-dot { 
+    width: 12px; 
+    height: 12px; 
+    border-radius: 50%; 
+    display: inline-block; 
+    margin-right: 0.5rem;
+}
+
+.condition-legend {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+
+/* Estilos para el offcanvas */
+.offcanvas {
+    width: 500px !important;
+}
+
+/* Fallback para offcanvas manual */
+.offcanvas.show {
+    transform: translateX(0);
+    visibility: visible;
+}
+
+body.offcanvas-open {
+    overflow: hidden;
+}
+
+body.offcanvas-open::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1040;
+    display: var(--overlay-display, block);
+}
+
+/* Estilos para el selector visual de condiciones */
+.condition-selector {
+    border: 2px solid #007bff;
+    border-radius: 8px;
+    padding: 15px;
+    background: #f8f9fa;
+    min-height: 200px;
+    display: block !important;
+    visibility: visible !important;
+}
+
+.condition-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+    gap: 10px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.condition-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px;
+    border: 2px solid transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.condition-item:hover {
+    border-color: #007bff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.condition-item.selected {
+    border-color: #28a745;
+    background: #d4edda;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3);
+}
+
+.condition-icon {
+    margin-bottom: 5px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.condition-icon svg {
+    transition: transform 0.3s ease;
+}
+
+.condition-item:hover .condition-icon svg {
+    transform: scale(1.1);
+}
+
+.condition-label {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: #495057;
+    text-align: center;
+    line-height: 1.2;
+}
+
+.condition-item.selected .condition-label {
+    color: #155724;
+    font-weight: 600;
+}
+</style>
+@endsection
+
+@section('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const offcanvasEl = document.getElementById('dentalEvaluationOffcanvas');
+    const inputHidden = document.getElementById('form_tooth_number');
+    const inputSurface = document.getElementById('form_surface');
+    const selectedToothInfo = document.getElementById('selectedToothInfoSlide');
+    const selectedSurfaceInfo = document.getElementById('selectedSurfaceInfoSlide');
+    
+    // Inicializar instancia del offcanvas
+    console.log('Inicializando offcanvas, elemento:', offcanvasEl);
+    if (offcanvasEl) {
+        try {
+            offcanvasInstance = new bootstrap.Offcanvas(offcanvasEl);
+            console.log('Instancia de offcanvas creada:', offcanvasInstance);
+        } catch (error) {
+            console.error('Error al crear instancia de offcanvas:', error);
+        }
+    } else {
+        console.error('No se encontró el elemento offcanvasEl');
+    }
+
+    // Variables para el estado del odontograma
+    let selectedTooth = null;
+    let selectedSurface = null;
+    let toothConditions = {}; // Almacenar condiciones por diente y superficie
+    let offcanvasInstance = null; // Instancia del offcanvas
+
+    // Mapeo de condiciones dentales con colores
+    const dentalConditions = {
+        'healthy': { name: 'Sano', color: '#27ae60', class: 'tooth-healthy' },
+        'caries': { name: 'Caries', color: '#e74c3c', class: 'tooth-caries' },
+        'filling': { name: 'Obturación', color: '#3498db', class: 'tooth-filling' },
+        'crown': { name: 'Corona', color: '#f39c12', class: 'tooth-crown' },
+        'bridge': { name: 'Puente', color: '#9b59b6', class: 'tooth-bridge' },
+        'implant': { name: 'Implante', color: '#95a5a6', class: 'tooth-implant' },
+        'extraction': { name: 'Extracción', color: '#2c3e50', class: 'tooth-extraction' },
+        'root_canal': { name: 'Endodoncia', color: '#c0392b', class: 'tooth-root-canal' },
+        'missing': { name: 'Ausente', color: '#6c757d', class: 'tooth-missing' },
+        'fractured': { name: 'Fracturado', color: '#f39c12', class: 'tooth-fractured' },
+        'wear': { name: 'Desgaste', color: '#ffc107', class: 'tooth-wear' },
+        'restoration': { name: 'Restauración', color: '#dc3545', class: 'tooth-restoration' },
+        'sealant': { name: 'Sellante', color: '#17a2b8', class: 'tooth-sealant' },
+        'veneer': { name: 'Carilla', color: '#6f42c1', class: 'tooth-veneer' },
+        'temporary': { name: 'Temporal', color: '#28a745', class: 'tooth-temporary' },
+        'lesion': { name: 'Lesión', color: '#721c24', class: 'tooth-lesion' }
+    };
+
+    // Inicializar odontograma interactivo
+    initializeInteractiveOdontogram();
+
+    function initializeInteractiveOdontogram() {
+        // Event listeners para dientes
+        document.querySelectorAll('.interactive-tooth').forEach(tooth => {
+            tooth.addEventListener('click', handleToothClick);
+            
+            // Event listeners para superficies
+            tooth.querySelectorAll('.surface').forEach(surface => {
+                surface.addEventListener('click', handleSurfaceClick);
+                surface.addEventListener('mouseenter', showSurfaceTooltip);
+                surface.addEventListener('mouseleave', hideSurfaceTooltip);
+            });
+        });
+
+        // Event listeners para el offcanvas
+        if (offcanvasEl) {
+            offcanvasEl.addEventListener('show.bs.offcanvas', handleOffcanvasShow);
+            offcanvasEl.addEventListener('hidden.bs.offcanvas', handleOffcanvasHide);
+        }
+        
+        // Inicializar instancia del offcanvas
+        if (offcanvasEl) {
+            try {
+                offcanvasInstance = new bootstrap.Offcanvas(offcanvasEl);
+                console.log('Instancia de offcanvas creada:', offcanvasInstance);
+            } catch (error) {
+                console.error('Error al crear instancia de offcanvas:', error);
+            }
+        } else {
+            console.error('No se encontró el elemento offcanvasEl');
+        }
+
+        // Event listeners para el botón de guardar
+        const saveBtn = document.getElementById('saveDentalEvaluationSlide');
+        if (saveBtn) {
+            saveBtn.addEventListener('click', handleSaveEvaluation);
+        }
+        
+        // Event listeners para el selector visual de condiciones
+        initializeConditionSelector();
+        
+        // Event listener global para limpiar overlay
+        document.addEventListener('hidden.bs.offcanvas', function(event) {
+            console.log('Evento global: offcanvas cerrado');
+            setTimeout(() => {
+                document.body.classList.remove('offcanvas-open', 'modal-open');
+                document.body.style.overflow = '';
+                document.body.style.paddingRight = '';
+                
+                const backdrops = document.querySelectorAll('.offcanvas-backdrop, .modal-backdrop');
+                backdrops.forEach(backdrop => backdrop.remove());
+            }, 100);
+        });
+        
+        // Función de emergencia para limpiar overlay (accesible desde consola)
+        window.clearOverlay = function() {
+            console.log('Limpiando overlay manualmente...');
+            document.body.classList.remove('offcanvas-open', 'modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
+            
+            const backdrops = document.querySelectorAll('.offcanvas-backdrop, .modal-backdrop');
+            backdrops.forEach(backdrop => backdrop.remove());
+        };
+        
+        const deleteBtn = document.getElementById('deleteToothEvaluationSlide');
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', handleDeleteEvaluation);
+        }
+        
+        // Event listeners para drag & drop de archivos
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const selectFilesBtn = document.getElementById('selectFilesBtn');
+        
+        if (selectFilesBtn && fileInput) {
+            selectFilesBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                fileInput.click();
+            });
+        }
+        
+        if (dropZone && fileInput) {
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.classList.add('border-primary', 'bg-primary-subtle');
+            });
+            
+            dropZone.addEventListener('dragleave', () => {
+                dropZone.classList.remove('border-primary', 'bg-primary-subtle');
+            });
+            
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('border-primary', 'bg-primary-subtle');
+                const files = e.dataTransfer.files;
+                handleFileSelection(files);
+            });
+            
+            fileInput.addEventListener('change', (e) => {
+                handleFileSelection(e.target.files);
+            });
+        }
+
+        // Event listeners para cambios en condiciones
+        setupConditionListeners();
+        
+        // Event listeners para plantillas rápidas
+        setupTemplateListeners();
+    }
+
+    function handleToothClick(event) {
+        event.stopPropagation();
+        
+        const tooth = event.currentTarget;
+        const toothNumber = tooth.getAttribute('data-tooth');
+        
+        // Remover selección anterior
+        document.querySelectorAll('.tooth-selected').forEach(t => t.classList.remove('tooth-selected'));
+        
+        // Seleccionar diente actual
+        tooth.classList.add('tooth-selected');
+        selectedTooth = toothNumber;
+        selectedSurface = null; // Reset surface selection
+        
+        // Actualizar información en el modal
+        if (selectedToothInfo) {
+            selectedToothInfo.textContent = `Diente ${toothNumber}`;
+        }
+        if (selectedSurfaceInfo) {
+            selectedSurfaceInfo.textContent = '-';
+        }
+        
+        // Actualizar inputs del formulario
+        if (inputHidden) inputHidden.value = toothNumber;
+        
+        // Mostrar información del diente
+        showToothInfo(toothNumber);
+        
+        // Abrir offcanvas usando JavaScript directo
+        console.log('Intentando abrir offcanvas');
+        const offcanvasElement = document.getElementById('dentalEvaluationOffcanvas');
+        if (offcanvasElement) {
+            try {
+                // Usar Bootstrap Offcanvas directamente
+                const offcanvas = new bootstrap.Offcanvas(offcanvasElement);
+                offcanvas.show();
+                console.log('Offcanvas abierto exitosamente');
+            } catch (error) {
+                console.error('Error al abrir offcanvas:', error);
+                // Fallback: mostrar el offcanvas manualmente
+                offcanvasElement.classList.add('show');
+                document.body.classList.add('offcanvas-open');
+            }
+        } else {
+            console.error('No se encontró el elemento offcanvas');
+        }
+    }
+
+    function handleSurfaceClick(event) {
+        event.stopPropagation();
+        
+        const surface = event.currentTarget;
+        const surfaceType = surface.getAttribute('data-surface');
+        const tooth = surface.closest('.interactive-tooth');
+        const toothNumber = tooth.getAttribute('data-tooth');
+        
+        selectedSurface = surfaceType;
+        
+        // Actualizar input de superficie
+        if (inputSurface) inputSurface.value = surfaceType;
+        
+        // Actualizar información en el modal
+        if (selectedSurfaceInfo) {
+            const surfaceNames = {
+                'O': 'Oclusal/Incisal',
+                'M': 'Mesial',
+                'D': 'Distal',
+                'V': 'Vestibular',
+                'L': 'Lingual/Palatina'
+            };
+            selectedSurfaceInfo.textContent = surfaceNames[surfaceType] || surfaceType;
+        }
+        
+        // Resaltar superficie seleccionada
+        tooth.querySelectorAll('.surface').forEach(s => s.classList.remove('surface-selected'));
+        surface.classList.add('surface-selected');
+        
+        // Mostrar modal de condición para la superficie
+        showSurfaceConditionModal(toothNumber, surfaceType);
+    }
+
+    function showSurfaceTooltip(event) {
+        const surface = event.currentTarget;
+        const surfaceType = surface.getAttribute('data-surface');
+        const tooth = surface.closest('.interactive-tooth');
+        const toothNumber = tooth.getAttribute('data-tooth');
+        
+        const surfaceNames = {
+            'O': 'Oclusal/Incisal',
+            'M': 'Mesial',
+            'D': 'Distal',
+            'V': 'Vestibular',
+            'L': 'Lingual/Palatina'
+        };
+        
+        const tooltip = document.createElement('div');
+        tooltip.className = 'tooth-tooltip';
+        tooltip.innerHTML = `
+            <div><strong>Diente ${toothNumber}</strong></div>
+            <div>Superficie: ${surfaceNames[surfaceType]}</div>
+            <div>Click para editar condición</div>
+        `;
+        
+        document.body.appendChild(tooltip);
+        
+        const rect = surface.getBoundingClientRect();
+        tooltip.style.left = rect.left + rect.width / 2 - tooltip.offsetWidth / 2 + 'px';
+        tooltip.style.top = rect.top - tooltip.offsetHeight - 10 + 'px';
+        
+        setTimeout(() => tooltip.classList.add('show'), 10);
+    }
+
+    function hideSurfaceTooltip(event) {
+        const tooltips = document.querySelectorAll('.tooth-tooltip');
+        tooltips.forEach(tooltip => tooltip.remove());
+    }
+
+    function showToothInfo(toothNumber) {
+        // Aquí se puede mostrar información adicional del diente
+        console.log(`Información del diente ${toothNumber}`);
+    }
+
+    function showSurfaceConditionModal(toothNumber, surfaceType) {
+        // Aquí se puede mostrar un modal para seleccionar la condición de la superficie
+        console.log(`Editar condición del diente ${toothNumber}, superficie ${surfaceType}`);
+    }
+
+    function handleOffcanvasShow(event) {
+        // Configurar el modal cuando se abre
+        if (selectedTooth && selectedToothInfo) {
+            selectedToothInfo.textContent = `Diente ${selectedTooth}`;
+        }
+        if (selectedSurface && selectedSurfaceInfo) {
+            const surfaceNames = {
+                'O': 'Oclusal/Incisal',
+                'M': 'Mesial',
+                'D': 'Distal',
+                'V': 'Vestibular',
+                'L': 'Lingual/Palatina'
+            };
+            selectedSurfaceInfo.textContent = surfaceNames[selectedSurface] || selectedSurface;
+        }
+    }
+    
+    function handleOffcanvasHide(event) {
+        // Limpiar overlay cuando se cierra el offcanvas
+        console.log('Offcanvas cerrado, limpiando overlay...');
+        
+        // Remover todas las clases relacionadas con offcanvas
+        document.body.classList.remove('offcanvas-open', 'modal-open');
+        document.body.style.overflow = '';
+        document.body.style.paddingRight = '';
+        
+        // Remover backdrop de Bootstrap si existe
+        const backdrops = document.querySelectorAll('.offcanvas-backdrop, .modal-backdrop');
+        backdrops.forEach(backdrop => backdrop.remove());
+        
+        // Forzar limpieza del overlay
+        setTimeout(() => {
+            document.body.classList.remove('offcanvas-open', 'modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
+        }, 100);
+    }
+    
+    function initializeConditionSelector() {
+        // Inicializar selector del modal original
+        const conditionSelector = document.getElementById('generalConditionSelector');
+        console.log('Inicializando selector de condiciones (modal):', conditionSelector);
+        if (conditionSelector) {
+            setupConditionSelector(conditionSelector);
+        }
+        
+        // Inicializar selector del offcanvas
+        const conditionSelectorSlide = document.getElementById('generalConditionSelectorSlide');
+        console.log('Inicializando selector de condiciones (offcanvas):', conditionSelectorSlide);
+        if (conditionSelectorSlide) {
+            setupConditionSelector(conditionSelectorSlide);
+        }
+    }
+    
+    function setupConditionSelector(selector) {
+        if (!selector) {
+            console.error('No se encontró el selector de condiciones');
+            return;
+        }
+        
+        const conditionItems = selector.querySelectorAll('.condition-item');
+        
+        conditionItems.forEach(item => {
+            item.addEventListener('click', function() {
+                // Remover selección anterior
+                conditionItems.forEach(i => i.classList.remove('selected'));
+                
+                // Seleccionar item actual
+                this.classList.add('selected');
+                
+                // Obtener condición seleccionada
+                const condition = this.getAttribute('data-condition');
+                console.log('Condición seleccionada:', condition);
+                
+                // Actualizar el valor en el formulario (crear input hidden si no existe)
+                let hiddenInput = document.getElementById('generalConditionSlide');
+                if (!hiddenInput) {
+                    hiddenInput = document.createElement('input');
+                    hiddenInput.type = 'hidden';
+                    hiddenInput.id = 'generalConditionSlide';
+                    hiddenInput.name = 'general_condition';
+                    selector.parentNode.appendChild(hiddenInput);
+                }
+                hiddenInput.value = condition;
+            });
+        });
+    }
+
+    function setupConditionListeners() {
+        // Listener para condición general
+        const generalCondition = document.getElementById('generalConditionSlide');
+        if (generalCondition) {
+            generalCondition.addEventListener('change', function() {
+                if (selectedTooth) {
+                    applyToothCondition(selectedTooth, this.value);
+                }
+            });
+        }
+
+        // Listeners para condiciones de superficies
+        document.querySelectorAll('.surface-condition').forEach(select => {
+            select.addEventListener('change', function() {
+                const surface = this.getAttribute('data-surface');
+                if (selectedTooth && surface) {
+                    applySurfaceCondition(selectedTooth, surface, this.value);
+                }
+            });
+        });
+    }
+
+    function setupTemplateListeners() {
+        // Plantillas rápidas
+        document.querySelectorAll('.template-btn').forEach(b => {
+            b.addEventListener('click', () => {
+                const name = b.dataset.name;
+                const code = b.dataset.code;
+                const time = b.dataset.time;
+                const cost = b.dataset.cost;
+                const nameInput = document.getElementById('procedure_name');
+                const codeInput = document.getElementById('procedure_code');
+                const timeInput = document.getElementById('estimated_time');
+                const costInput = document.getElementById('estimated_cost');
+                if (nameInput) nameInput.value = name;
+                if (codeInput) codeInput.value = code;
+                if (timeInput) timeInput.value = time;
+                if (costInput) costInput.value = cost;
+            });
+        });
+    }
+
+    function handleDeleteEvaluation() {
+        if (!selectedTooth) {
+            showToast('No hay diente seleccionado', 'error');
+            return;
+        }
+        
+        // Mostrar modal de selección de condiciones a borrar
+        showDeleteConditionsModal();
+    }
+    
+    function deleteAllConditions() {
+        if (!selectedTooth) return;
+        
+        console.log('Borrando todas las condiciones del diente:', selectedTooth);
+        
+        // Enviar petición al servidor
+        fetch(`/dental-plans/{{ $plan->id }}/tooth-evaluation/${selectedTooth}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Limpiar visualmente el diente
+                const toothElement = document.querySelector(`.interactive-tooth[data-tooth="${selectedTooth}"]`);
+                const toothContainer = document.querySelector(`.tooth-container[data-tooth="${selectedTooth}"]`);
+                
+                if (toothElement && toothContainer) {
+                    // Remover todas las clases de condición
+                    Object.values(dentalConditions).forEach(cond => {
+                        toothElement.classList.remove(cond.class);
+                    });
+                    
+                    // Remover clases especiales
+                    toothContainer.classList.remove('has-condition', 'has-implante');
+                    
+                    // Limpiar condiciones del objeto
+                    delete toothConditions[selectedTooth];
+                }
+                
+                showToast('Condiciones borradas correctamente', 'success');
+            } else {
+                showToast('Error al borrar condiciones: ' + (data.message || 'Error desconocido'), 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('Error de conexión al borrar condiciones', 'error');
+        });
+    }
+    
+    function showDeleteConditionsModal() {
+        const toothElement = document.querySelector(`.interactive-tooth[data-tooth="${selectedTooth}"]`);
+        const toothContainer = document.querySelector(`.tooth-container[data-tooth="${selectedTooth}"]`);
+        
+        if (!toothElement || !toothContainer) {
+            showToast('No se encontró el diente seleccionado', 'error');
+            return;
+        }
+        
+        // Recopilar condiciones existentes
+        const existingConditions = [];
+        
+        // Verificar condición general
+        Object.values(dentalConditions).forEach(cond => {
+            if (toothElement.classList.contains(cond.class)) {
+                existingConditions.push({
+                    type: 'general',
+                    name: cond.name,
+                    class: cond.class
+                });
+            }
+        });
+        
+        // Si no hay condiciones, mostrar mensaje
+        if (existingConditions.length === 0) {
+            showToast('No hay condiciones para borrar en este diente', 'info');
+            return;
+        }
+        
+        // Crear modal simple con overlay
+        createSimpleDeleteModal(existingConditions);
+    }
+    
+    function createSimpleDeleteModal(conditions) {
+        // Crear overlay
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        `;
+        
+        // Crear modal
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        `;
+        
+        modal.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0">Seleccionar condiciones a borrar</h5>
+                <button type="button" class="btn-close" onclick="closeDeleteModal()"></button>
+            </div>
+            <p class="text-muted mb-3">Diente ${selectedTooth} - Selecciona las condiciones que deseas eliminar:</p>
+            <div id="conditionsList">
+                ${conditions.map(cond => `
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" value="${cond.class}" id="delete_${cond.class}">
+                        <label class="form-check-label" for="delete_${cond.class}">
+                            ${cond.name}
+                        </label>
+                    </div>
+                `).join('')}
+            </div>
+            <div class="d-flex justify-content-end gap-2 mt-4">
+                <button type="button" class="btn btn-secondary" onclick="closeDeleteModal()">Cancelar</button>
+                <button type="button" class="btn btn-danger" onclick="confirmDeleteConditions()">Borrar Seleccionadas</button>
+            </div>
+        `;
+        
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+        
+        // Hacer funciones globales
+        window.closeDeleteModal = function() {
+            document.body.removeChild(overlay);
+        };
+        
+        window.confirmDeleteConditions = function() {
+            const checkboxes = modal.querySelectorAll('input[type="checkbox"]:checked');
+            const conditionsToDelete = Array.from(checkboxes).map(cb => cb.value);
+            
+            if (conditionsToDelete.length === 0) {
+                showToast('Selecciona al menos una condición para borrar', 'warning');
+                return;
+            }
+            
+            closeDeleteModal();
+            deleteSelectedConditions(conditionsToDelete);
+        };
+    }
+    
+    function deleteSelectedConditions(conditionsToDelete) {
+        if (!selectedTooth) return;
+        
+        console.log('Borrando condiciones seleccionadas:', conditionsToDelete);
+        
+        // Enviar petición al servidor
+        fetch(`/dental-plans/{{ $plan->id }}/tooth-evaluation/${selectedTooth}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            },
+            body: JSON.stringify({
+                conditions_to_delete: conditionsToDelete
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Limpiar visualmente las condiciones seleccionadas
+                const toothElement = document.querySelector(`.interactive-tooth[data-tooth="${selectedTooth}"]`);
+                const toothContainer = document.querySelector(`.tooth-container[data-tooth="${selectedTooth}"]`);
+                
+                if (toothElement && toothContainer) {
+                    // Remover clases de las condiciones seleccionadas
+                    conditionsToDelete.forEach(conditionClass => {
+                        toothElement.classList.remove(conditionClass);
+                    });
+                    
+                    // Verificar si quedan condiciones
+                    const hasRemainingConditions = Object.values(dentalConditions).some(cond => 
+                        toothElement.classList.contains(cond.class)
+                    );
+                    
+                    if (!hasRemainingConditions) {
+                        toothContainer.classList.remove('has-condition', 'has-implante');
+                    }
+                }
+                
+                showToast('Condiciones borradas correctamente', 'success');
+            } else {
+                showToast('Error al borrar condiciones: ' + (data.message || 'Error desconocido'), 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('Error de conexión al borrar condiciones', 'error');
+        });
+    }
+                    surfaceConditions[surfaceName].push({
+                        type: 'surface',
+                        name: dentalConditions[cond].name,
+                        class: `surface-${cond}`,
+                        surface: surfaceName
+                    });
+                }
+            });
+        });
+        
+        // Si no hay condiciones, mostrar mensaje
+        if (existingConditions.length === 0 && Object.keys(surfaceConditions).length === 0) {
+            showToast('No hay condiciones para borrar en este diente', 'info');
+            return;
+        }
+        
+        // Crear modal de selección
+        const modalHtml = `
+            <div class="modal fade" id="deleteConditionsModal" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Borrar Condiciones - Diente ${selectedTooth}</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p>Selecciona qué condiciones quieres borrar:</p>
+                            
+                            ${existingConditions.length > 0 ? `
+                                <div class="mb-3">
+                                    <h6>Condición General:</h6>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="delete-general" checked>
+                                        <label class="form-check-label" for="delete-general">
+                                            ${existingConditions[0].name}
+                                        </label>
+                                    </div>
+                                </div>
+                            ` : ''}
+                            
+                            ${Object.keys(surfaceConditions).length > 0 ? `
+                                <div class="mb-3">
+                                    <h6>Condiciones de Superficies:</h6>
+                                    ${Object.entries(surfaceConditions).map(([surface, conditions]) => `
+                                        <div class="mb-2">
+                                            <strong>Superficie ${surface.toUpperCase()}:</strong>
+                                            ${conditions.map(cond => `
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" id="delete-${cond.surface}-${cond.class}" checked>
+                                                    <label class="form-check-label" for="delete-${cond.surface}-${cond.class}">
+                                                        ${cond.name}
+                                                    </label>
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            ` : ''}
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="button" class="btn btn-danger" onclick="confirmDeleteConditions()">Borrar Seleccionadas</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Remover modal anterior si existe
+        const existingModal = document.getElementById('deleteConditionsModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        // Agregar modal al DOM
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // Mostrar modal
+        const modal = new bootstrap.Offcanvas(document.getElementById('deleteConditionsModal'));
+        modal.show();
+        
+        // Limpiar modal al cerrar
+        document.getElementById('deleteConditionsModal').addEventListener('hidden.bs.modal', function() {
+            this.remove();
+        });
+    }
+    
+    function confirmDeleteConditions() {
+        const selectedConditions = [];
+        
+        // Recopilar condiciones generales seleccionadas
+        const generalCheckbox = document.getElementById('delete-general');
+        if (generalCheckbox && generalCheckbox.checked) {
+            selectedConditions.push('general');
+        }
+        
+        // Recopilar condiciones de superficies seleccionadas
+        document.querySelectorAll('#deleteConditionsModal input[type="checkbox"]:checked').forEach(checkbox => {
+            if (checkbox.id.startsWith('delete-') && !checkbox.id.includes('general')) {
+                const parts = checkbox.id.split('-');
+                if (parts.length >= 3) {
+                    const surface = parts[1];
+                    const condition = parts.slice(2).join('-');
+                    selectedConditions.push(`${surface}-${condition}`);
+                }
+            }
+        });
+        
+        console.log('Condiciones a borrar:', selectedConditions);
+        
+        if (selectedConditions.length === 0) {
+            showToast('Selecciona al menos una condición para borrar', 'warning');
+            return;
+        }
+        
+        // Cerrar modal
+        const modal = bootstrap.Offcanvas.getInstance(document.getElementById('deleteConditionsModal'));
+        modal.hide();
+        
+        // Proceder con el borrado
+        deleteSelectedConditions(selectedConditions);
+    }
+    
+    function deleteSelectedConditions(conditionsToDelete) {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        const planId = '{{ $plan->id }}';
+        
+        fetch(`/dental-plans/${planId}/tooth-evaluation/${selectedTooth}`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRF-TOKEN': csrfToken,
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                conditions_to_delete: conditionsToDelete
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast('Condiciones seleccionadas eliminadas correctamente', 'success');
+                
+                // Remover clases visuales
+                const toothElement = document.querySelector(`.interactive-tooth[data-tooth="${selectedTooth}"]`);
+                const toothContainer = document.querySelector(`.tooth-container[data-tooth="${selectedTooth}"]`);
+                
+                if (toothElement) {
+                    // Remover todas las clases de condición
+                    Object.values(dentalConditions).forEach(cond => {
+                        toothElement.classList.remove(cond.class);
+                    });
+                    
+                    // Remover clases de superficies
+                    toothElement.querySelectorAll('.surface').forEach(surface => {
+                        Object.keys(dentalConditions).forEach(cond => {
+                            surface.classList.remove(`surface-${cond}`);
+                        });
+                    });
+                }
+                
+                // Remover sombreado del 18u y clase de implante
+                if (toothContainer) {
+                    toothContainer.classList.remove('has-condition');
+                    toothContainer.classList.remove('has-implante');
+                }
+                
+                // Actualizar sombreado y estado del diente
+                updateToothShadow(selectedTooth);
+                
+                // Cerrar modal
+                const modal = bootstrap.Offcanvas.getInstance(offcanvasEl);
+                if (modal) {
+                    modal.hide();
+                }
+            } else {
+                showToast('Error al eliminar: ' + (data.message || 'Error desconocido'), 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('Error de conexión al eliminar', 'error');
+        });
+    }
+    
+    // Array global para mantener los archivos seleccionados
+    let selectedFiles = [];
+    
+    function handleFileSelection(newFiles) {
+        const selectedFilesContainer = document.getElementById('selectedFilesContainer');
+        const selectedFilesList = document.getElementById('selectedFilesList');
+        
+        if (!newFiles || newFiles.length === 0) return;
+        
+        // Agregar nuevos archivos al array existente
+        selectedFiles = [...selectedFiles, ...Array.from(newFiles)];
+        
+        selectedFilesContainer.style.display = 'block';
+        selectedFilesList.innerHTML = '';
+        
+        selectedFiles.forEach((file, index) => {
+            const fileSize = (file.size / 1024 / 1024).toFixed(2);
+            const fileIcon = file.type.includes('image') ? 'fa-image' : 
+                           file.type.includes('pdf') ? 'fa-file-pdf' : 'fa-file-alt';
+            const isImage = file.type.includes('image');
+            
+            const fileItem = `
+                <div class="list-group-item d-flex justify-content-between align-items-center" data-file-index="${index}">
+                    <div class="d-flex align-items-center">
+                        <i class="fas ${fileIcon} fa-2x text-primary me-3"></i>
+                        <div>
+                            <h6 class="mb-0">${file.name}</h6>
+                            <small class="text-muted">${fileSize} MB</small>
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        ${isImage ? `<button type="button" class="btn btn-sm btn-outline-info" onclick="previewFile(${index})">
+                            <i class="fas fa-eye"></i> Ver
+                        </button>` : ''}
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeFile(${index})">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            selectedFilesList.insertAdjacentHTML('beforeend', fileItem);
+        });
+        
+        // Limpiar el input para permitir seleccionar los mismos archivos otra vez
+        const fileInput = document.getElementById('fileInput');
+        if (fileInput) {
+            fileInput.value = '';
+        }
+        
+        console.log(`📎 Total: ${selectedFiles.length} archivo(s) seleccionado(s)`);
+    }
+    
+    function removeFile(index) {
+        selectedFiles.splice(index, 1);
+        
+        const selectedFilesContainer = document.getElementById('selectedFilesContainer');
+        const selectedFilesList = document.getElementById('selectedFilesList');
+        
+        if (selectedFiles.length === 0) {
+            selectedFilesContainer.style.display = 'none';
+            selectedFilesList.innerHTML = '';
+        } else {
+            // Volver a renderizar la lista
+            const tempFiles = [...selectedFiles];
+            selectedFiles = [];
+            handleFileSelection(tempFiles);
+        }
+        
+        console.log(`🗑️ Archivo eliminado. Restantes: ${selectedFiles.length}`);
+    }
+    
+    function previewFile(index) {
+        const file = selectedFiles[index];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            // Crear modal de preview
+            const previewModal = `
+                <div class="modal fade" id="filePreviewModal" tabindex="-1">
+                    <div class="modal-dialog modal-lg modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">
+                                    <i class="fas fa-image me-2"></i>${file.name}
+                                </h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body text-center">
+                                <img src="${e.target.result}" class="img-fluid" alt="${file.name}" style="max-height: 70vh;">
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Remover modal previo si existe
+            const existingModal = document.getElementById('filePreviewModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+            
+            // Agregar nuevo modal
+            document.body.insertAdjacentHTML('beforeend', previewModal);
+            
+            // Mostrar modal
+            const modal = new bootstrap.Offcanvas(document.getElementById('filePreviewModal'));
+            modal.show();
+            
+            // Limpiar al cerrar
+            document.getElementById('filePreviewModal').addEventListener('hidden.bs.modal', function() {
+                this.remove();
+            });
+        };
+        
+        reader.readAsDataURL(file);
+    }
+    
+    function handleSaveEvaluation() {
+        // Recopilar todos los datos del modal
+        const evaluationData = {
+            tooth: selectedTooth,
+            surface: selectedSurface,
+            generalCondition: document.getElementById('generalConditionSlide')?.value,
+            priority: document.getElementById('prioritySlide')?.value,
+            generalNotes: document.getElementById('generalNotesSlide')?.value,
+            // Pestaña Tratamiento
+            procedureName: document.getElementById('procedure_name')?.value,
+            cdt_code: document.getElementById('cdt_code')?.value,
+            estimatedTime: document.getElementById('estimated_time')?.value,
+            estimatedCost: document.getElementById('estimated_cost')?.value,
+            scheduled_date: document.getElementById('scheduled_date')?.value,
+            treatmentNotes: document.getElementById('treatment_notes')?.value,
+            // Pestaña Avanzado
+            mobility: document.getElementById('mobility')?.value,
+            pocketDepth: document.getElementById('pocket_depth')?.value,
+            bleeding: document.getElementById('bleeding')?.checked,
+            recession: document.getElementById('recession')?.value,
+            radiolucency: document.getElementById('radiolucency')?.checked,
+            boneLoss: document.getElementById('bone_loss')?.checked,
+            periapicalLesion: document.getElementById('periapical_lesion')?.checked,
+            advancedNotes: document.getElementById('advanced_notes')?.value
+        };
+
+        // Recopilar condiciones de superficies
+        const surfaceConditions = {};
+        document.querySelectorAll('.surface-condition').forEach(select => {
+            const surface = select.getAttribute('data-surface');
+            if (surface && select.value) {
+                surfaceConditions[surface] = select.value;
+            }
+        });
+        evaluationData.surfaceConditions = surfaceConditions;
+
+        console.log('📊 Datos de evaluación completos:', evaluationData);
+        console.log('🦷 Diente seleccionado:', selectedTooth);
+        console.log('🎨 Condición general:', evaluationData.generalCondition);
+        console.log('📐 Superficies:', evaluationData.surfaceConditions);
+        
+        // Aplicar la condición general al diente si existe
+        if (evaluationData.generalCondition && selectedTooth) {
+            console.log('✅ Aplicando condición visual:', evaluationData.generalCondition);
+            applyToothCondition(selectedTooth, evaluationData.generalCondition);
+        } else {
+            console.log('⚠️ No se puede aplicar condición - generalCondition:', evaluationData.generalCondition, 'selectedTooth:', selectedTooth);
+        }
+        
+        // Aplicar condiciones a las superficies
+        if (evaluationData.surfaceConditions && selectedTooth) {
+            Object.entries(evaluationData.surfaceConditions).forEach(([surface, condition]) => {
+                applySurfaceCondition(selectedTooth, surface, condition);
+            });
+        }
+        
+        // Actualizar el sombreado del 18u basado en condiciones existentes
+        if (selectedTooth) {
+            updateToothShadow(selectedTooth, evaluationData);
+        }
+        
+        // Enviar datos al servidor
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        const planId = '{{ $plan->id }}';
+        
+        fetch(`/dental-plans/${planId}/tooth-evaluation`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                tooth_number: evaluationData.tooth,
+                general_condition: evaluationData.generalCondition,
+                surface_conditions: evaluationData.surfaceConditions,
+                priority: evaluationData.priority,
+                general_notes: evaluationData.generalNotes,
+                procedure_name: evaluationData.procedureName,
+                procedure_code: evaluationData.cdt_code,
+                estimated_time: evaluationData.estimatedTime,
+                estimated_cost: evaluationData.estimatedCost,
+                scheduled_date: evaluationData.scheduled_date,
+                treatment_notes: evaluationData.treatmentNotes,
+                mobility: evaluationData.mobility,
+                pocket_depth: evaluationData.pocketDepth,
+                bleeding: evaluationData.bleeding,
+                recession: evaluationData.recession,
+                radiolucency: evaluationData.radiolucency,
+                bone_loss: evaluationData.boneLoss,
+                periapical_lesion: evaluationData.periapicalLesion,
+                advanced_notes: evaluationData.advancedNotes
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast('Evaluación del diente guardada correctamente', 'success');
+                console.log('✅ Datos guardados:', data);
+            } else {
+                showToast('Error al guardar: ' + (data.message || 'Error desconocido'), 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('Error de conexión al guardar la evaluación', 'error');
+        });
+        
+        // Cerrar el modal
+        const modal = bootstrap.Offcanvas.getInstance(offcanvasEl);
+        if (modal) {
+            modal.hide();
+        }
+        
+        // Limpiar overlay inmediatamente
+        setTimeout(() => {
+            document.body.classList.remove('offcanvas-open', 'modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
+            
+            // Remover backdrops de Bootstrap
+            const backdrops = document.querySelectorAll('.offcanvas-backdrop, .modal-backdrop');
+            backdrops.forEach(backdrop => backdrop.remove());
+        }, 50);
+    }
+
+    // Función para aplicar condición a un diente
+    function applyToothCondition(toothNumber, condition) {
+        const toothElement = document.querySelector(`.interactive-tooth[data-tooth="${toothNumber}"]`);
+        const toothContainer = document.querySelector(`.tooth-container[data-tooth="${toothNumber}"]`);
+        
+        console.log('applyToothCondition called:', toothNumber, condition, toothContainer);
+        
+        if (toothElement && dentalConditions[condition]) {
+            // Remover clases anteriores del diente
+            Object.values(dentalConditions).forEach(cond => {
+                toothElement.classList.remove(cond.class);
+            });
+            
+            // Remover clase de implante si existía
+            if (toothContainer) {
+                toothContainer.classList.remove('has-implante');
+            }
+            
+            // Aplicar nueva condición al diente
+            toothElement.classList.add(dentalConditions[condition].class);
+            
+            // Si es implante, agregar clase especial a todos los dientes que terminan en D
+            if (condition === 'implant' && toothContainer) {
+                // Solo agregar implante a dientes que representan corona (terminan en D)
+                const toothNum = parseInt(toothNumber);
+                if ((toothNum >= 11 && toothNum <= 18) || 
+                    (toothNum >= 21 && toothNum <= 28) || 
+                    (toothNum >= 31 && toothNum <= 38) || 
+                    (toothNum >= 41 && toothNum <= 48)) {
+                    toothContainer.classList.add('has-implante');
+                    console.log('has-implante added to:', toothNumber);
+                }
+            }
+            
+            // Agregar clase "has-condition" al contenedor para sombrear el 18u
+            if (toothContainer) {
+                toothContainer.classList.add('has-condition');
+                console.log('has-condition added to:', toothNumber);
+            }
+            
+            // Guardar en el estado
+            if (!toothConditions[toothNumber]) {
+                toothConditions[toothNumber] = {};
+            }
+            toothConditions[toothNumber].overall = condition;
+        }
+        
+        // Si la condición es "healthy" (sano), remover la clase has-condition
+        if (toothContainer && condition === 'healthy') {
+            toothContainer.classList.remove('has-condition');
+            console.log('has-condition removed from:', toothNumber);
+        }
+    }
+    
+    // Función para actualizar el estado de sombreado del 18u basado en condiciones existentes
+    function updateToothShadow(toothNumber, evaluationData = null) {
+        const toothElement = document.querySelector(`.interactive-tooth[data-tooth="${toothNumber}"]`);
+        const toothContainer = document.querySelector(`.tooth-container[data-tooth="${toothNumber}"]`);
+        
+        if (toothElement && toothContainer) {
+            let hasCondition = false;
+            
+            // 1. Verificar si el diente tiene alguna clase de condición general
+            hasCondition = Object.values(dentalConditions).some(cond => 
+                toothElement.classList.contains(cond.class)
+            );
+            
+            // 2. Si no tiene condición general, verificar si tiene condiciones en superficies
+            if (!hasCondition && evaluationData?.surfaceConditions) {
+                hasCondition = Object.keys(evaluationData.surfaceConditions).length > 0;
+            }
+            
+            // 3. Si no tiene ninguna, verificar si tiene procedimientos/tratamiento
+            if (!hasCondition && evaluationData) {
+                hasCondition = !!(
+                    evaluationData.procedureName || 
+                    evaluationData.mobility || 
+                    evaluationData.pocketDepth ||
+                    evaluationData.generalNotes ||
+                    evaluationData.advancedNotes
+                );
+            }
+            
+            // 4. Si no se pasó evaluationData, verificar superficies directamente en el DOM
+            if (!hasCondition && !evaluationData) {
+                const surfaces = toothElement.querySelectorAll('.surface[class*="surface-"]');
+                hasCondition = Array.from(surfaces).some(surface => {
+                    const classes = surface.className;
+                    return classes.includes('surface-caries') || 
+                           classes.includes('surface-filling') ||
+                           classes.includes('surface-crown') ||
+                           classes.match(/surface-\w+/) !== null;
+                });
+            }
+            
+            if (hasCondition) {
+                toothContainer.classList.add('has-condition');
+                console.log('Shadow enabled for tooth:', toothNumber);
+            } else {
+                toothContainer.classList.remove('has-condition');
+                console.log('Shadow disabled for tooth:', toothNumber);
+            }
+            
+            // Manejar clase de implante específicamente
+            const hasImplant = toothElement.classList.contains('tooth-implant');
+            if (hasImplant) {
+                toothContainer.classList.add('has-implante');
+                console.log('Implant class added for tooth:', toothNumber);
+            } else {
+                toothContainer.classList.remove('has-implante');
+                console.log('Implant class removed for tooth:', toothNumber);
+            }
+        }
+    }
+
+    // Función para aplicar condición a una superficie
+    function applySurfaceCondition(toothNumber, surfaceType, condition) {
+        const toothElement = document.querySelector(`[data-tooth="${toothNumber}"]`);
+        const surfaceElement = toothElement?.querySelector(`[data-surface="${surfaceType}"]`);
+        
+        if (surfaceElement && dentalConditions[condition]) {
+            // Remover clases anteriores
+            Object.keys(dentalConditions).forEach(cond => {
+                surfaceElement.classList.remove(`surface-${cond}`);
+            });
+            
+            // Aplicar nueva condición
+            surfaceElement.classList.add(`surface-${condition}`);
+            
+            // Guardar en el estado
+            if (!toothConditions[toothNumber]) {
+                toothConditions[toothNumber] = { surfaces: {} };
+            }
+            if (!toothConditions[toothNumber].surfaces) {
+                toothConditions[toothNumber].surfaces = {};
+            }
+            toothConditions[toothNumber].surfaces[surfaceType] = condition;
+        }
+    }
+
+    // Exponer funciones globalmente para uso en otros scripts
+    window.OdontogramManager = {
+        applyToothCondition,
+        applySurfaceCondition,
+        updateToothShadow,
+        getToothConditions: () => toothConditions,
+        setToothConditions: (conditions) => { toothConditions = conditions; }
+    };
+    
+    // Exponer también como funciones globales directas
+    window.applyToothCondition = applyToothCondition;
+    window.applySurfaceCondition = applySurfaceCondition;
+    window.updateToothShadow = updateToothShadow;
+    window.removeFile = removeFile;
+    window.previewFile = previewFile;
+    window.confirmDeleteConditions = confirmDeleteConditions;
+});
+
+// Funciones de exportación del odontograma
+function exportOdontogramPDF() {
+    showToast('Generando PDF del odontograma...', 'success');
+    
+    const planId = '{{ $plan->id }}';
+    window.open(`/dental-plans/${planId}/export-pdf`, '_blank');
+}
+
+function exportOdontogramImage() {
+    showToast('Generando imagen del odontograma...', 'success');
+    
+    // Usar html2canvas para capturar el odontograma
+    const odontogramContainer = document.querySelector('.odontogram-container');
+    
+    if (!odontogramContainer) {
+        showToast('Error: No se encontró el odontograma', 'error');
+        return;
+    }
+    
+    // Verificar si html2canvas está disponible
+    if (typeof html2canvas === 'undefined') {
+        // Cargar html2canvas dinámicamente
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+        script.onload = function() {
+            captureOdontogramImage(odontogramContainer);
+        };
+        document.head.appendChild(script);
+    } else {
+        captureOdontogramImage(odontogramContainer);
+    }
+}
+
+function captureOdontogramImage(container) {
+    html2canvas(container, {
+        backgroundColor: '#ffffff',
+        scale: 2,
+        logging: false
+    }).then(canvas => {
+        // Convertir canvas a blob
+        canvas.toBlob(function(blob) {
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.download = `odontograma_{{ $plan->plan_code }}_${new Date().toISOString().split('T')[0]}.png`;
+            link.href = url;
+            link.click();
+            URL.revokeObjectURL(url);
+            
+            showToast('Imagen descargada correctamente', 'success');
+        });
+    }).catch(error => {
+        console.error('Error al capturar imagen:', error);
+        showToast('Error al generar la imagen', 'error');
+    });
+}
+
+function printOdontogram() {
+    showToast('Preparando impresión...', 'success');
+    
+    const odontogramContainer = document.querySelector('.odontogram-container');
+    const legend = document.querySelector('.condition-legend');
+    
+    if (!odontogramContainer) {
+        showToast('Error: No se encontró el odontograma', 'error');
+        return;
+    }
+    
+    // Crear ventana de impresión
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Odontograma - {{ $plan->plan_code }}</title>
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+            <style>
+                @page { size: landscape; margin: 1cm; }
+                body { font-family: Arial, sans-serif; padding: 20px; }
+                .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 15px; }
+                .odontogram-container { margin: 20px auto; }
+                .condition-legend { margin-top: 30px; page-break-inside: avoid; }
+                @media print {
+                    .no-print { display: none !important; }
+                }
+            <\/style>
+        <\/head>
+        <body>
+            <div class="header">
+                <h2>ODONTOGRAMA - PLAN {{ $plan->plan_code }}</h2>
+                <p><strong>Paciente:</strong> {{ $plan->patient->getFullNameAttribute() }}</p>
+                <p><strong>Fecha:</strong> ${new Date().toLocaleDateString('es-ES')}</p>
+            </div>
+            ${odontogramContainer.outerHTML}
+            ${legend ? legend.outerHTML : ''}
+            <script>
+                window.onload = function() {
+                    setTimeout(() => {
+                        window.print();
+                        setTimeout(() => window.close(), 100);
+                    }, 500);
+                };
+            <\/script>
+        <\/body>
+        <\/html>
+    `);
+    printWindow.document.close();
+}
+
+
+// El sombreado del 18u se controla solo desde handleSaveEvaluation()
+// cuando se selecciona una condición en la pestaña "Condición General"
+
+// Inicializar tooltips de Bootstrap
+document.addEventListener('DOMContentLoaded', function() {
+    // Inicializar todos los tooltips
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl, {
+            trigger: 'hover',
+            delay: { show: 300, hide: 100 }
+        });
+    });
+    
+    console.log(`✅ ${tooltipList.length} tooltips initialized`);
+    
+    // Cargar datos del odontograma guardados
+    loadSavedOdontogram();
+});
+
+// Función para cargar odontograma guardado desde el servidor
+function loadSavedOdontogram() {
+    const planId = '{{ $plan->id }}';
+    
+    @if($plan->odontograms->count() > 0)
+        console.log('📊 Cargando odontograma guardado...');
+        
+        // Esperar a que OdontogramManager esté disponible
+        setTimeout(() => {
+            @foreach($plan->odontograms as $odontogram)
+                (function() {
+                    const toothData = {
+                        toothNumber: '{{ $odontogram->tooth_number }}',
+                        condition: @json($odontogram->conditions['general'] ?? null),
+                        surfaces: @json($odontogram->surfaces),
+                        priority: @json($odontogram->conditions['priority'] ?? null),
+                        notes: '{{ addslashes($odontogram->notes ?? "") }}'
+                    };
+                    
+                    console.log('Loading tooth:', toothData);
+                    
+                    // Aplicar condición visual
+                    if (toothData.condition) {
+                        applyToothCondition(toothData.toothNumber, toothData.condition);
+                        
+                        // Si es implante, aplicar clase especial a todos los dientes que terminan en D
+                        if (toothData.condition === 'implant') {
+                            const toothNum = parseInt(toothData.toothNumber);
+                            if ((toothNum >= 11 && toothNum <= 18) || 
+                                (toothNum >= 21 && toothNum <= 28) || 
+                                (toothNum >= 31 && toothNum <= 38) || 
+                                (toothNum >= 41 && toothNum <= 48)) {
+                                const toothContainer = document.querySelector(`.tooth-container[data-tooth="${toothData.toothNumber}"]`);
+                                if (toothContainer) {
+                                    toothContainer.classList.add('has-implante');
+                                    console.log('has-implante loaded for:', toothData.toothNumber);
+                                }
+                            }
+                        }
+                        
+                        // Actualizar sombreado del 18u si es el diente 18
+                        if (toothData.toothNumber === '18') {
+                            updateToothShadow('18', {
+                                generalCondition: toothData.condition
+                            });
+                        }
+                        
+                        // Actualizar sombreado del 17U si es el diente 17
+                        if (toothData.toothNumber === '17') {
+                            updateToothShadow('17', {
+                                generalCondition: toothData.condition
+                            });
+                        }
+                        
+                        // Actualizar sombreado del 16U si es el diente 16
+                        if (toothData.toothNumber === '16') {
+                            updateToothShadow('16', {
+                                generalCondition: toothData.condition
+                            });
+                        }
+                        
+                        // Actualizar sombreado del 15C si es el diente 15
+                        if (toothData.toothNumber === '15') {
+                            updateToothShadow('15', {
+                                generalCondition: toothData.condition
+                            });
+                        }
+                        
+                        // Actualizar sombreado del 14C si es el diente 14
+                        if (toothData.toothNumber === '14') {
+                            updateToothShadow('14', {
+                                generalCondition: toothData.condition
+                            });
+                        }
+                        
+                        // Actualizar sombreado del 13C si es el diente 13
+                        if (toothData.toothNumber === '13') {
+                            updateToothShadow('13', {
+                                generalCondition: toothData.condition
+                            });
+                        }
+                        
+                        // Actualizar sombreado del 12C si es el diente 12
+                        if (toothData.toothNumber === '12') {
+                            updateToothShadow('12', {
+                                generalCondition: toothData.condition
+                            });
+                        }
+                        
+                        // Actualizar sombreado del 11C si es el diente 11
+                        if (toothData.toothNumber === '11') {
+                            updateToothShadow('11', {
+                                generalCondition: toothData.condition
+                            });
+                        }
+                        
+                        // Actualizar sombreado del 21D si es el diente 21
+                        if (toothData.toothNumber === '21') {
+                            updateToothShadow('21', {
+                                generalCondition: toothData.condition
+                            });
+                        }
+                        
+                        // Actualizar sombreado del 22D si es el diente 22
+                        if (toothData.toothNumber === '22') {
+                            updateToothShadow('22', {
+                                generalCondition: toothData.condition
+                            });
+                        }
+                        
+                        // Actualizar sombreado del 23D si es el diente 23
+                        if (toothData.toothNumber === '23') {
+                            updateToothShadow('23', {
+                                generalCondition: toothData.condition
+                            });
+                        }
+                        
+                        // Actualizar sombreado del 24D si es el diente 24
+                        if (toothData.toothNumber === '24') {
+                            updateToothShadow('24', {
+                                generalCondition: toothData.condition
+                            });
+                        }
+                        
+                        // Actualizar sombreado del 25D si es el diente 25
+                        if (toothData.toothNumber === '25') {
+                            updateToothShadow('25', {
+                                generalCondition: toothData.condition
+                            });
+                        }
+                        
+                        // Actualizar sombreado del 26D si es el diente 26
+                        if (toothData.toothNumber === '26') {
+                            updateToothShadow('26', {
+                                generalCondition: toothData.condition
+                            });
+                        }
+                        
+                        // Actualizar sombreado del 27D si es el diente 27
+                        if (toothData.toothNumber === '27') {
+                            updateToothShadow('27', {
+                                generalCondition: toothData.condition
+                            });
+                        }
+                        
+                        // Actualizar sombreado del 28D si es el diente 28
+                        if (toothData.toothNumber === '28') {
+                            updateToothShadow('28', {
+                                generalCondition: toothData.condition
+                            });
+                        }
+                        
+                        // Actualizar sombreado de dientes de arcada inferior
+                        if (toothData.toothNumber === '48') {
+                            updateToothShadow('48', {
+                                generalCondition: toothData.condition
+                            });
+                        }
+                        if (toothData.toothNumber === '47') {
+                            updateToothShadow('47', {
+                                generalCondition: toothData.condition
+                            });
+                        }
+                        if (toothData.toothNumber === '46') {
+                            updateToothShadow('46', {
+                                generalCondition: toothData.condition
+                            });
+                        }
+                        if (toothData.toothNumber === '45') {
+                            updateToothShadow('45', {
+                                generalCondition: toothData.condition
+                            });
+                        }
+                        if (toothData.toothNumber === '44') {
+                            updateToothShadow('44', {
+                                generalCondition: toothData.condition
+                            });
+                        }
+                        if (toothData.toothNumber === '43') {
+                            updateToothShadow('43', {
+                                generalCondition: toothData.condition
+                            });
+                        }
+                        if (toothData.toothNumber === '42') {
+                            updateToothShadow('42', {
+                                generalCondition: toothData.condition
+                            });
+                        }
+                        if (toothData.toothNumber === '41') {
+                            updateToothShadow('41', {
+                                generalCondition: toothData.condition
+                            });
+                        }
+                    }
+                    
+                    // Aplicar condiciones de superficies
+                    if (toothData.surfaces) {
+                        Object.entries(toothData.surfaces).forEach(([surface, condition]) => {
+                            applySurfaceCondition(toothData.toothNumber, surface, condition);
+                        });
+                    }
+                    
+                    console.log(`✅ Diente ${toothData.toothNumber} cargado`);
+                })();
+            @endforeach
+            
+            console.log('✅ Odontograma cargado completamente');
+        }, 500);
+    @else
+        console.log('ℹ️ No hay datos guardados del odontograma');
+    @endif
+}
+
+// Función para mostrar toasts
+function showToast(message, type = 'success') {
+    const toastContainer = document.querySelector('.toast-container') || createToastContainer();
+    
+    const toastId = 'toast-' + Date.now();
+    const isSuccess = type === 'success';
+    const bgColor = isSuccess ? '#38c66c' : '#dc3545';
+    const icon = isSuccess ? 'fa-check' : 'fa-exclamation-triangle';
+    const title = isSuccess ? '¡Éxito!' : 'Error';
+    const bodyIcon = isSuccess ? 'fa-tooth' : 'fa-exclamation-circle';
+    
+    const toastHTML = `
+        <div id="${toastId}" class="toast" role="alert" aria-live="assertive" aria-atomic="true" style="transition: opacity 0.5s ease-out;">
+            <div class="toast-header text-white border-0" style="background: ${bgColor} !important; background-color: ${bgColor} !important; background-image: none !important;">
+                <div class="avatar avatar-xs avatar-label-light me-2">
+                    <i class="fas ${icon} fs-12"></i>
+                </div>
+                <strong class="me-auto">${title}</strong>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body bg-light">
+                <div class="d-flex align-items-center">
+                    <div class="avatar avatar-xs avatar-label-${isSuccess ? 'success' : 'danger'} me-2">
+                        <i class="fas ${bodyIcon} fs-12"></i>
+                    </div>
+                    <span class="text-muted">${message}</span>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+    const toastElement = document.getElementById(toastId);
+    
+    // Mostrar el toast con animación
+    setTimeout(() => {
+        toastElement.classList.add('show');
+    }, 10);
+    
+    // Auto-ocultar después de 3 segundos con fade-out
+    setTimeout(() => {
+        if (toastElement) {
+            // Fade out durante 0.5 segundos
+            toastElement.style.opacity = '0';
+            
+            // Remover completamente después del fade-out
+            setTimeout(() => {
+                toastElement.classList.remove('show');
+                setTimeout(() => toastElement.remove(), 150);
+            }, 500);
+        }
+    }, 3000);
+}
+
+function createToastContainer() {
+    const container = document.createElement('div');
+    container.className = 'toast-container position-fixed top-0 end-0 p-3';
+    container.style.zIndex = '9999';
+    document.body.appendChild(container);
+    return container;
+}
+
+// Script para el toast de éxito del sistema (cuando viene de edit/update)
+document.addEventListener('DOMContentLoaded', function() {
+    const successToast = document.getElementById('successToast');
+    if (successToast) {
+        const toast = new bootstrap.Toast(successToast, {
+            autohide: false,
+            delay: 0
+        });
+        toast.show();
+        
+        // Aplicar transición de desvanecimiento después de 3 segundos
+        setTimeout(function() {
+            successToast.style.opacity = '0';
+            successToast.style.transform = 'scale(0.9)';
+            successToast.style.transition = 'all 0.5s ease-out';
+            
+            // Remover el elemento después de la animación
+            setTimeout(function() {
+                successToast.remove();
+            }, 500);
+        }, 3000);
+    }
+});
+</script>
+@endsection
