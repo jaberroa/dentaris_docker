@@ -72,7 +72,7 @@
     @if($errors->any())
         <div class="alert alert-danger alert-dismissible fade show" role="alert">
             <i class="fas fa-exclamation-triangle me-2"></i>
-            <strong>No se pudo registrar el ajuste.</strong>
+            <strong>No se pudo completar la operación de inventario.</strong>
             <ul class="mb-0 mt-2">
                 @foreach($errors->all() as $error)
                     <li>{{ $error }}</li>
@@ -188,6 +188,25 @@
                                             <button type="button" class="btn btn-sm btn-outline-warning" title="Ajustar stock" aria-label="Ajustar stock" data-bs-toggle="modal" data-bs-target="#adjustStockModal" data-inventory-id="{{ $inventory->id }}" data-product-id="{{ $inventory->product_id }}" data-product-name="{{ $inventory->product->name ?? 'Producto' }}">
                                                 <i class="fas fa-edit"></i>
                                             </button>
+                                            @if(auth()->user()?->hasPermission('manage_inventory'))
+                                                @php $hasTransferDestination = $transferDestinationsByProduct->get($inventory->product_id, collect())->count() > 1; @endphp
+                                                <button
+                                                    type="button"
+                                                    class="btn btn-sm btn-outline-info"
+                                                    title="{{ $hasTransferDestination ? 'Transferir stock' : 'No hay otra ubicación disponible para este producto' }}"
+                                                    aria-label="Transferir stock"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#transferStockModal"
+                                                    data-source-inventory-id="{{ $inventory->id }}"
+                                                    data-product-id="{{ $inventory->product_id }}"
+                                                    data-product-name="{{ $inventory->product->name ?? 'Producto' }}"
+                                                    data-source-location="{{ $inventory->location ?: 'Ubicación no definida' }}"
+                                                    data-available-stock="{{ $inventory->available_stock }}"
+                                                    @disabled(! $hasTransferDestination)
+                                                >
+                                                    <i class="fas fa-exchange-alt"></i>
+                                                </button>
+                                            @endif
                                         </div>
                                     </td>
                                 </tr>
@@ -210,6 +229,16 @@
     </div>
 </div>
 
+@foreach($transferDestinationsByProduct as $productId => $destinations)
+    <template id="transfer-destinations-product-{{ $productId }}">
+        @foreach($destinations as $destination)
+            <option value="{{ $destination->id }}" data-inventory-id="{{ $destination->id }}">
+                {{ $destination->location ?: 'Ubicación no definida' }} · Disponible: {{ $destination->available_stock }}
+            </option>
+        @endforeach
+    </template>
+@endforeach
+
 <div class="modal fade" id="adjustStockModal" tabindex="-1" aria-labelledby="adjustStockModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -217,7 +246,7 @@
                 <h5 class="modal-title" id="adjustStockModalLabel"><i class="fas fa-boxes me-2 text-warning"></i>Ajustar stock</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
-            <form method="POST" action="{{ route('inventory.adjust', ['inventory' => '__inventory__']) }}" id="adjustStockForm">
+            <form method="POST" action="{{ route('inventory.adjust', ['inventory' => '__inventory__']) }}" data-action-template="{{ route('inventory.adjust', ['inventory' => '__inventory__']) }}" id="adjustStockForm">
                 @csrf
                 <div class="modal-body">
                     <p class="text-muted mb-3">Producto: <strong id="adjustProductName">—</strong></p>
@@ -249,6 +278,58 @@
     </div>
 </div>
 
+<div class="modal fade" id="transferStockModal" tabindex="-1" aria-labelledby="transferStockModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title text-info" id="transferStockModalLabel"><i class="fas fa-exchange-alt me-2"></i>Transferir stock</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form method="POST" action="{{ route('inventory.transfer') }}" id="transferStockForm">
+                @csrf
+                <div class="modal-body p-4">
+                    <div class="alert alert-info d-flex gap-2" role="alert">
+                        <i class="fas fa-info-circle mt-1"></i>
+                        <div>Solo puedes transferir stock disponible entre ubicaciones del mismo producto. El stock reservado se conserva en el origen.</div>
+                    </div>
+                    <input type="hidden" name="inventory_id" id="transferSourceInventoryId">
+                    <div class="mb-3">
+                        <span class="text-muted d-block small">Producto</span>
+                        <strong id="transferProductName">—</strong>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <span class="text-muted d-block small">Origen</span>
+                            <strong id="transferSourceLocation">—</strong>
+                        </div>
+                        <div class="col-md-6">
+                            <span class="text-muted d-block small">Disponible</span>
+                            <strong id="transferAvailableStock">0</strong>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="transferDestinationInventoryId" class="form-label">Destino</label>
+                        <select name="destination_inventory_id" id="transferDestinationInventoryId" class="form-select" required></select>
+                        <div id="transferDestinationHelp" class="form-text"></div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="transferQuantity" class="form-label">Cantidad a transferir</label>
+                        <input type="number" name="quantity" id="transferQuantity" class="form-control" min="1" required>
+                    </div>
+                    <div>
+                        <label for="transferReason" class="form-label">Motivo</label>
+                        <textarea name="reason" id="transferReason" class="form-control" rows="3" maxlength="255" required placeholder="Ej.: Reposición del consultorio 1"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-info text-white" id="transferSubmitButton"><i class="fas fa-exchange-alt me-1"></i>Confirmar transferencia</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
 document.getElementById('adjustStockModal')?.addEventListener('show.bs.modal', function (event) {
     const button = event.relatedTarget;
@@ -257,7 +338,39 @@ document.getElementById('adjustStockModal')?.addEventListener('show.bs.modal', f
     document.getElementById('adjustInventoryId').value = inventoryId;
     document.getElementById('adjustProductId').value = button.dataset.productId;
     document.getElementById('adjustProductName').textContent = button.dataset.productName;
-    form.action = form.action.replace('__inventory__', inventoryId);
+    form.action = form.dataset.actionTemplate.replace('__inventory__', inventoryId);
+});
+
+document.getElementById('transferStockModal')?.addEventListener('show.bs.modal', function (event) {
+    const button = event.relatedTarget;
+    const sourceInventoryId = button.dataset.sourceInventoryId;
+    const productId = button.dataset.productId;
+    const destinationSelect = document.getElementById('transferDestinationInventoryId');
+    const destinationHelp = document.getElementById('transferDestinationHelp');
+    const submitButton = document.getElementById('transferSubmitButton');
+    const destinationTemplate = document.getElementById(`transfer-destinations-product-${productId}`);
+
+    document.getElementById('transferStockForm').reset();
+    document.getElementById('transferSourceInventoryId').value = sourceInventoryId;
+    document.getElementById('transferProductName').textContent = button.dataset.productName;
+    document.getElementById('transferSourceLocation').textContent = button.dataset.sourceLocation;
+    document.getElementById('transferAvailableStock').textContent = button.dataset.availableStock;
+    document.getElementById('transferQuantity').max = button.dataset.availableStock;
+    destinationSelect.innerHTML = '<option value="">Selecciona una ubicación</option>';
+
+    if (destinationTemplate) {
+        const destinations = [...destinationTemplate.content.children]
+            .filter((option) => option.dataset.inventoryId !== sourceInventoryId);
+
+        destinations.forEach((option) => destinationSelect.append(option.cloneNode(true)));
+    }
+
+    const hasDestinations = destinationSelect.options.length > 1;
+    destinationSelect.disabled = !hasDestinations;
+    submitButton.disabled = !hasDestinations;
+    destinationHelp.textContent = hasDestinations
+        ? 'Solo se muestran ubicaciones que contienen este mismo producto.'
+        : 'Este producto aún no tiene otra ubicación de inventario disponible para transferir.';
 });
 </script>
 @endsection

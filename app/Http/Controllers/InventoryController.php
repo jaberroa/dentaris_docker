@@ -79,8 +79,14 @@ class InventoryController extends Controller
         // Datos para filtros
         $categories = Product::select('category')->distinct()->pluck('category');
         $suppliers = Supplier::where('is_active', true)->get();
+        $transferDestinationsByProduct = Inventory::query()
+            ->with('product:id,name')
+            ->orderBy('product_id')
+            ->orderBy('location')
+            ->get()
+            ->groupBy('product_id');
 
-        return view('inventory.index', compact('inventories', 'categories', 'suppliers'));
+        return view('inventory.index', compact('inventories', 'categories', 'suppliers', 'transferDestinationsByProduct'));
     }
 
     public function show(Inventory $inventory)
