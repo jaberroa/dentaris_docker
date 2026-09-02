@@ -29,6 +29,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => \App\Http\Middleware\CheckRole::class,
             'active' => \App\Http\Middleware\EnsureUserIsActive::class,
             'activity' => \App\Http\Middleware\LogUserActivity::class,
+            'clinic.context' => \App\Http\Middleware\ResolveClinicContext::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
