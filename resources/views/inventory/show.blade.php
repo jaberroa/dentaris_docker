@@ -107,12 +107,18 @@
                                             <td>{{ $movement->user->name ?? 'Sistema' }}</td>
                                             <td class="text-end">
                                                 @if($movement->reference_type !== \App\Models\InventoryMovement::class && !in_array($movement->id, $reversedMovementIds, true))
-                                                    <form method="POST" action="{{ route('inventory.movements.reverse', $movement) }}" class="d-inline" onsubmit="return confirm('¿Deseas revertir este movimiento? Se registrará un movimiento compensatorio.');">
-                                                        @csrf
-                                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Revertir movimiento" aria-label="Revertir movimiento">
-                                                            <i class="fas fa-undo"></i>
-                                                        </button>
-                                                    </form>
+                                                    <button
+                                                        type="button"
+                                                        class="btn btn-sm btn-outline-danger"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#reversalMovementModal"
+                                                        data-reversal-url="{{ route('inventory.movements.reverse', $movement) }}"
+                                                        data-reversal-label="{{ $inventory->product->name ?? 'Producto' }} · {{ $movement->reason ?: 'Movimiento #'.$movement->id }}"
+                                                        title="Revertir movimiento"
+                                                        aria-label="Revertir movimiento"
+                                                    >
+                                                        <i class="fas fa-undo"></i>
+                                                    </button>
                                                 @else
                                                     <span class="text-muted small">{{ $movement->reference_type === \App\Models\InventoryMovement::class ? 'Reversión' : 'Revertido' }}</span>
                                                 @endif
@@ -133,4 +139,5 @@
         </div>
     </div>
 </div>
+@include('inventory.partials.reversal-modal')
 @endsection
