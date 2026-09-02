@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Data\InventoryMovementData;
 use App\Models\Inventory;
+use App\Models\InventoryMovement;
 use App\Models\Product;
 use App\Models\User;
 use App\Services\InventoryMovementService;
@@ -31,6 +32,13 @@ class InventoryMovementServiceTest extends TestCase
         $this->assertSame(8, $movement->stock_after);
         $this->assertSame($user->id, $movement->user_id);
         $this->assertSame('Compra recibida', $movement->reason);
+        $this->assertDatabaseHas('activity_log', [
+            'subject_type' => InventoryMovement::class,
+            'subject_id' => $inventory->id,
+            'causer_id' => $user->id,
+            'log_name' => 'inventory',
+            'description' => 'inventory.movement.created',
+        ]);
     }
 
     public function test_adjustment_rejects_invalid_input_before_database_work(): void

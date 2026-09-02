@@ -47,7 +47,7 @@ class InventoryMovementService
                 'available_stock' => max(0, $after - (int) $inventory->reserved_stock),
             ]);
 
-            return InventoryMovement::create([
+            $movement = InventoryMovement::create([
                 'inventory_id' => $inventory->id,
                 'product_id' => $data->productId,
                 'user_id' => $actor->id,
@@ -62,6 +62,22 @@ class InventoryMovementService
                 'reference_id' => $data->referenceId,
                 'metadata' => $data->metadata,
             ]);
+
+            activity('inventory')
+                ->causedBy($actor)
+                ->performedOn($movement)
+                ->withProperties([
+                    'inventory_id' => $inventory->id,
+                    'product_id' => $data->productId,
+                    'type' => $data->type,
+                    'quantity' => $data->quantity,
+                    'stock_before' => $before,
+                    'stock_after' => $after,
+                    'reason' => $data->reason,
+                ])
+                ->log('inventory.movement.created');
+
+            return $movement;
         });
     }
 }
