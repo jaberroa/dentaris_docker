@@ -7,14 +7,32 @@ use App\Models\Inventory;
 use App\Models\InventoryMovement;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 use RuntimeException;
 
 class InventoryMovementService
 {
     public function adjust(InventoryMovementData $data, User $actor): InventoryMovement
     {
+        if ($data->quantity < 1) {
+            throw new InvalidArgumentException('La cantidad debe ser mayor que cero.');
+        }
+
+        if (!in_array($data->type, ['adjustment', 'restock', 'consumption'], true)) {
+            throw new InvalidArgumentException('El tipo de movimiento no es válido.');
+        }
+
+        if ($data->reason === null || trim($data->reason) === '') {
+            throw new InvalidArgumentException('El motivo del movimiento es obligatorio.');
+        }
+
         return DB::transaction(function () use ($data, $actor): InventoryMovement {
             $inventory = Inventory::query()->lockForUpdate()->findOrFail($data->inventoryId);
+
+            if ((int) $inventory->product_id !== $data->productId) {
+                throw new InvalidArgumentException('El producto no corresponde al inventario indicado.');
+            }
+
             $before = (int) $inventory->current_stock;
             $after = $data->type === 'adjustment'
                 ? $data->quantity
