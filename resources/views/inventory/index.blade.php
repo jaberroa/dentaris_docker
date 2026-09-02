@@ -42,7 +42,7 @@
                             <thead>
                                 <tr>
                                     <th>ID</th>
-                                    <th>Productoo</th>
+                                    <th>Producto</th>
                                     <th>Categoría</th>
                                     <th>Stock Actual</th>
                                     <th>Stock Mínimo</th>
@@ -74,7 +74,7 @@
                                             <a href="{{ route('inventory.show', $inventory) }}" class="btn btn-sm btn-outline-primary" title="Ver inventario" aria-label="Ver inventario">
                                                 <i class="fas fa-eye"></i>
                                             </a>
-                                            <button type="button" class="btn btn-sm btn-outline-warning" title="Ajustar stock" aria-label="Ajustar stock" onclick="adjustStock({{ $inventory->id }})">
+                                            <button type="button" class="btn btn-sm btn-outline-warning" title="Ajustar stock" aria-label="Ajustar stock" data-bs-toggle="modal" data-bs-target="#adjustStockModal" data-inventory-id="{{ $inventory->id }}" data-product-id="{{ $inventory->product_id }}" data-product-name="{{ $inventory->product->name ?? 'Producto' }}">
                                                 <i class="fas fa-edit"></i>
                                             </button>
                                         </div>
@@ -94,11 +94,55 @@
     </div>
 </div>
 
+<div class="modal fade" id="adjustStockModal" tabindex="-1" aria-labelledby="adjustStockModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="adjustStockModalLabel"><i class="fas fa-boxes me-2 text-warning"></i>Ajustar stock</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form method="POST" action="{{ route('inventory.adjust', ['inventory' => '__inventory__']) }}" id="adjustStockForm">
+                @csrf
+                <div class="modal-body">
+                    <p class="text-muted mb-3">Producto: <strong id="adjustProductName">—</strong></p>
+                    <input type="hidden" name="inventory_id" id="adjustInventoryId">
+                    <input type="hidden" name="product_id" id="adjustProductId">
+                    <div class="mb-3">
+                        <label for="adjustType" class="form-label">Tipo de movimiento</label>
+                        <select name="type" id="adjustType" class="form-select" required>
+                            <option value="restock">Entrada / reposición</option>
+                            <option value="consumption">Salida / consumo</option>
+                            <option value="adjustment">Ajuste a cantidad exacta</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="adjustQuantity" class="form-label">Cantidad</label>
+                        <input type="number" name="quantity" id="adjustQuantity" class="form-control" min="1" required>
+                    </div>
+                    <div>
+                        <label for="adjustReason" class="form-label">Motivo</label>
+                        <textarea name="reason" id="adjustReason" class="form-control" rows="3" maxlength="255" required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-warning"><i class="fas fa-check me-1"></i>Guardar ajuste</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
-function adjustStock(id) {
-    // Función para ajustar stock
-    alert('Función de ajuste de stock para el producto ID: ' + id);
-}
+document.getElementById('adjustStockModal')?.addEventListener('show.bs.modal', function (event) {
+    const button = event.relatedTarget;
+    const form = document.getElementById('adjustStockForm');
+    const inventoryId = button.dataset.inventoryId;
+    document.getElementById('adjustInventoryId').value = inventoryId;
+    document.getElementById('adjustProductId').value = button.dataset.productId;
+    document.getElementById('adjustProductName').textContent = button.dataset.productName;
+    form.action = form.action.replace('__inventory__', inventoryId);
+});
 </script>
 @endsection
 
