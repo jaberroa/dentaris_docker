@@ -11,6 +11,10 @@ Fecha de revisión: 2026-09-01.
 
 El conteo es estático sobre los archivos actuales y no sustituye la salida de `route:list`, que queda para la fase de verificación ejecutable.
 
+## Verificación ejecutable
+
+El 2026-09-01 se intentó ejecutar `php artisan route:list --json` en la copia Windows. La ejecución no inició porque falta `vendor/autoload.php`. No se instalaron dependencias ni se ejecutaron migraciones. Por tanto, el conteo anterior permanece como evidencia estática y la comparación real de URI, nombre, controlador y middleware debe ejecutarse posteriormente en `~/Dentaris_Docker` después de sincronizar con `git pull origin main`.
+
 ## Catálogo por superficie
 
 | Superficie | Recursos observados | Autorización explícita observada |
