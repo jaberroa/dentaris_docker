@@ -29,9 +29,9 @@
                     <p class="text-muted mb-3">Administra facturas, sus estados y el saldo pendiente de cada paciente.</p>
                 </div>
                 <div class="page-title-right">
-                    @can('create', AppModelsInvoice::class)
+                    @if(auth()->user()?->hasPermission('manage_billing'))
                         <a href="{{ route('billing.create') }}" class="btn btn-primary"><i class="fas fa-file-invoice-dollar me-1"></i> Nueva factura</a>
-                    @endcan
+                    @endif
                 </div>
             </div>
         </div>
@@ -102,7 +102,7 @@
                         </div>
                         <div class="d-flex justify-content-end">{{ $invoices->links() }}</div>
                     @else
-                        <div class="text-center py-5"><div class="avatar avatar-lg avatar-label-light mx-auto mb-3"><i class="fas fa-file-invoice-dollar fs-24 text-muted"></i></div><h5 class="mb-1">No hay facturas registradas</h5><p class="text-muted mb-3">Crea la primera factura para comenzar a controlar la facturación.</p>@can('create', AppModelsInvoice::class)<a href="{{ route('billing.create') }}" class="btn btn-primary"><i class="fas fa-plus me-1"></i> Nueva factura</a>@endcan</div>
+                        <div class="text-center py-5"><div class="avatar avatar-lg avatar-label-light mx-auto mb-3"><i class="fas fa-file-invoice-dollar fs-24 text-muted"></i></div><h5 class="mb-1">No hay facturas registradas</h5><p class="text-muted mb-3">Crea la primera factura para comenzar a controlar la facturación.</p>@if(auth()->user()?->hasPermission('manage_billing'))<a href="{{ route('billing.create') }}" class="btn btn-primary"><i class="fas fa-plus me-1"></i> Nueva factura</a>@endif</div>
                     @endif
                 </div>
             </div>

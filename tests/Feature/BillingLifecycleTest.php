@@ -15,6 +15,16 @@ class BillingLifecycleTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_user_with_billing_management_permission_sees_the_create_invoice_action(): void
+    {
+        [$user] = $this->fixture();
+
+        $this->actingAs($user)
+            ->get(route('billing.index'))
+            ->assertOk()
+            ->assertSee('Nueva factura');
+    }
+
     public function test_authorized_user_can_edit_only_a_draft_invoice_without_payments(): void
     {
         [$user, $invoice, $catalogItem] = $this->fixture();
