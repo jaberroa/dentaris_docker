@@ -4,8 +4,10 @@ namespace Tests\Unit;
 
 use App\Models\Invoice;
 use App\Models\Inventory;
+use App\Models\InventoryMovement;
 use App\Models\User;
 use App\Policies\InvoicePolicy;
+use App\Policies\InventoryMovementPolicy;
 use App\Policies\InventoryPolicy;
 use Tests\TestCase;
 
@@ -38,6 +40,15 @@ class DomainPolicyTest extends TestCase
         $this->assertTrue($policy->adjust($adjuster, $inventory));
         $this->assertTrue($policy->export($exporter));
         $this->assertFalse($policy->export($manager));
+    }
+
+    public function test_inventory_movement_reversal_requires_adjustment_permission(): void
+    {
+        $policy = new InventoryMovementPolicy();
+        $movement = new InventoryMovement();
+
+        $this->assertTrue($policy->reverse($this->userWithPermissions(['adjust_inventory']), $movement));
+        $this->assertFalse($policy->reverse($this->userWithPermissions(['manage_inventory']), $movement));
     }
 
     private function userWithPermissions(array $permissions): User

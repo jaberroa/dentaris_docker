@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use App\Data\InventoryMovementData;
 use App\Http\Requests\Inventory\CreateInventoryAdjustmentRequest;
 use App\Models\Inventory;
+use App\Models\InventoryMovement;
 use App\Models\Product;
 use App\Models\Supplier;
+use App\Repositories\InventoryMovementRepository;
 use App\Services\InventoryMovementService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -85,7 +87,31 @@ class InventoryController extends Controller
             ->latest()
             ->paginate(15);
 
-        return view('inventory.show', compact('inventory', 'movements'));
+        $reversedMovementIds = InventoryMovement::query()
+            ->where('reference_type', InventoryMovement::class)
+            ->whereIn('reference_id', $movements->pluck('id'))
+            ->pluck('reference_id')
+            ->all();
+
+        return view('inventory.show', compact('inventory', 'movements', 'reversedMovementIds'));
+    }
+
+    public function movements(InventoryMovementRepository $movementRepository)
+    {
+        $query = $movementRepository->query()->latest();
+
+        if (request()->filled('type')) {
+            $query->where('type', request('type'));
+        }
+
+        $movements = $query->paginate(20)->withQueryString();
+        $reversedMovementIds = InventoryMovement::query()
+            ->where('reference_type', InventoryMovement::class)
+            ->whereIn('reference_id', $movements->pluck('id'))
+            ->pluck('reference_id')
+            ->all();
+
+        return view('inventory.movements', compact('movements', 'reversedMovementIds'));
     }
 
     public function update(Request $request, Inventory $inventory)
@@ -135,6 +161,14 @@ class InventoryController extends Controller
 
         return redirect()->route('inventory.show', $movement->inventory_id)
             ->with('success', 'Movimiento de inventario registrado correctamente');
+    }
+
+    public function reverseMovement(InventoryMovement $movement, InventoryMovementService $movementService)
+    {
+        $reversal = $movementService->reverse($movement, request()->user());
+
+        return redirect()->route('inventory.show', $reversal->inventory_id)
+            ->with('success', 'Movimiento revertido correctamente.');
     }
 
     public function lowStock()

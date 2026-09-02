@@ -87,6 +87,7 @@
                     </a>
                     <ul class="sub-menu" aria-expanded="false">
                         <li><a href="{{ route('inventory.index') }}"><i class="mdi mdi-checkbox-blank-circle align-middle"></i>Productos</a></li>
+                        <li><a href="{{ route('inventory.movements') }}"><i class="mdi mdi-checkbox-blank-circle align-middle"></i>Movimientos</a></li>
                         <li><a href="{{ route('suppliers.index') }}"><i class="mdi mdi-checkbox-blank-circle align-middle"></i>Proveedores</a></li>
                         <li><a href="{{ route('purchases.index') }}"><i class="mdi mdi-checkbox-blank-circle align-middle"></i>Compras</a></li>
                     </ul>

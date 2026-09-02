@@ -68,6 +68,28 @@ class InventoryMovementServiceTest extends TestCase
         $this->assertDatabaseCount('inventory_movements', 0);
     }
 
+    public function test_reversal_creates_compensating_movement_without_deleting_original(): void
+    {
+        [$user, $inventory] = $this->inventoryFixture(5);
+        $service = app(InventoryMovementService::class);
+
+        $original = $service->adjust(
+            new InventoryMovementData($inventory->id, $inventory->product_id, 'restock', 3, 'Compra recibida'),
+            $user,
+        );
+        $reversal = $service->reverse($original, $user);
+
+        $this->assertSame(5, $inventory->fresh()->current_stock);
+        $this->assertSame('consumption', $reversal->type);
+        $this->assertSame(3, $reversal->quantity);
+        $this->assertSame(InventoryMovement::class, $reversal->reference_type);
+        $this->assertSame($original->id, $reversal->reference_id);
+        $this->assertDatabaseCount('inventory_movements', 2);
+
+        $this->expectException(InvalidArgumentException::class);
+        $service->reverse($original, $user);
+    }
+
     private function inventoryFixture(int $stock): array
     {
         $user = User::factory()->create();

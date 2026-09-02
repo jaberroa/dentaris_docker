@@ -12,6 +12,48 @@ use RuntimeException;
 
 class InventoryMovementService
 {
+    public function reverse(InventoryMovement $movement, User $actor): InventoryMovement
+    {
+        return DB::transaction(function () use ($movement, $actor): InventoryMovement {
+            $original = InventoryMovement::query()->lockForUpdate()->findOrFail($movement->id);
+
+            if ($original->reference_type === InventoryMovement::class) {
+                throw new InvalidArgumentException('No se puede revertir un movimiento de reversión.');
+            }
+
+            $alreadyReversed = InventoryMovement::query()
+                ->where('reference_type', InventoryMovement::class)
+                ->where('reference_id', $original->id)
+                ->exists();
+
+            if ($alreadyReversed) {
+                throw new InvalidArgumentException('Este movimiento ya fue revertido.');
+            }
+
+            $stockDelta = $original->stock_after - $original->stock_before;
+
+            if ($stockDelta === 0) {
+                throw new InvalidArgumentException('Este movimiento no modificó el stock y no requiere reversión.');
+            }
+
+            return $this->adjust(
+                new InventoryMovementData(
+                    $original->inventory_id,
+                    $original->product_id,
+                    $stockDelta > 0 ? 'consumption' : 'restock',
+                    abs($stockDelta),
+                    'Reversión del movimiento #'.$original->id.': '.($original->reason ?: $original->type),
+                    $original->destination_location,
+                    $original->source_location,
+                    InventoryMovement::class,
+                    $original->id,
+                    ['reversal_of' => $original->id],
+                ),
+                $actor,
+            );
+        });
+    }
+
     public function adjust(InventoryMovementData $data, User $actor): InventoryMovement
     {
         if ($data->quantity < 1) {

@@ -121,13 +121,16 @@ Route::middleware('auth')->group(function () {
     
     // Gestión de Inventario
     Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory.index');
-    Route::get('/inventory/{inventory}', [InventoryController::class, 'show'])
-        ->middleware('can:view,inventory')
-        ->name('inventory.show');
+    Route::get('/inventory/movements', [InventoryController::class, 'movements'])
+        ->middleware('permission:view_inventory')
+        ->name('inventory.movements');
     Route::get('/inventory/low-stock', [InventoryController::class, 'lowStock'])->name('inventory.low-stock');
     Route::get('/inventory/out-of-stock', [InventoryController::class, 'outOfStock'])->name('inventory.out-of-stock');
     Route::get('/inventory/expiring-soon', [InventoryController::class, 'expiringSoon'])->name('inventory.expiring-soon');
     Route::get('/inventory/report', [InventoryController::class, 'report'])->name('inventory.report');
+    Route::get('/inventory/{inventory}', [InventoryController::class, 'show'])
+        ->middleware('can:view,inventory')
+        ->name('inventory.show');
     
     Route::middleware('can:manage_inventory')->group(function () {
         Route::put('/inventory/{inventory}', [InventoryController::class, 'update'])
@@ -140,6 +143,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/inventory/{inventory}/adjust', [InventoryController::class, 'adjust'])
         ->middleware('can:adjust,inventory')
         ->name('inventory.adjust');
+    Route::post('/inventory/movements/{movement}/reverse', [InventoryController::class, 'reverseMovement'])
+        ->middleware('can:reverse,movement')
+        ->name('inventory.movements.reverse');
     
     // Gestión de Facturación
     Route::get('/billing', [BillingController::class, 'index'])->name('billing.index');

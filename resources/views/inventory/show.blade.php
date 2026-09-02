@@ -84,8 +84,9 @@
                                         <th>Tipo</th>
                                         <th>Cantidad</th>
                                         <th>Stock</th>
-                                        <th>Motivo</th>
-                                        <th>Registrado por</th>
+                                    <th>Motivo</th>
+                                    <th>Registrado por</th>
+                                    <th class="text-end">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -104,6 +105,18 @@
                                             <td>{{ $movement->stock_before }} <i class="fas fa-arrow-right text-muted mx-1"></i> {{ $movement->stock_after }}</td>
                                             <td>{{ $movement->reason ?: 'Sin motivo indicado' }}</td>
                                             <td>{{ $movement->user->name ?? 'Sistema' }}</td>
+                                            <td class="text-end">
+                                                @if($movement->reference_type !== \App\Models\InventoryMovement::class && !in_array($movement->id, $reversedMovementIds, true))
+                                                    <form method="POST" action="{{ route('inventory.movements.reverse', $movement) }}" class="d-inline" onsubmit="return confirm('¿Deseas revertir este movimiento? Se registrará un movimiento compensatorio.');">
+                                                        @csrf
+                                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Revertir movimiento" aria-label="Revertir movimiento">
+                                                            <i class="fas fa-undo"></i>
+                                                        </button>
+                                                    </form>
+                                                @else
+                                                    <span class="text-muted small">{{ $movement->reference_type === \App\Models\InventoryMovement::class ? 'Reversión' : 'Revertido' }}</span>
+                                                @endif
+                                            </td>
                                         </tr>
                                     @endforeach
                                 </tbody>
