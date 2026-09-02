@@ -80,7 +80,12 @@ class InventoryController extends Controller
     public function show(Inventory $inventory)
     {
         $inventory->load(['product.primarySupplier']);
-        return view('inventory.show', compact('inventory'));
+        $movements = $inventory->movements()
+            ->with('user')
+            ->latest()
+            ->paginate(15);
+
+        return view('inventory.show', compact('inventory', 'movements'));
     }
 
     public function update(Request $request, Inventory $inventory)
