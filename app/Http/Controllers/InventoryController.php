@@ -106,13 +106,17 @@ class InventoryController extends Controller
             ->with('success', 'Inventario actualizado correctamente');
     }
 
-    public function adjust(CreateInventoryAdjustmentRequest $request, InventoryMovementService $movementService)
+    public function adjust(
+        CreateInventoryAdjustmentRequest $request,
+        Inventory $inventory,
+        InventoryMovementService $movementService,
+    )
     {
         $data = $request->validated();
         $movement = $movementService->adjust(
             new InventoryMovementData(
-                (int) $data['inventory_id'],
-                (int) $data['product_id'],
+                $inventory->id,
+                $inventory->product_id,
                 $data['type'],
                 (int) $data['quantity'],
                 $data['reason'],
