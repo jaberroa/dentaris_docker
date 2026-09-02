@@ -28,10 +28,10 @@
                         <h5 class="card-title mb-0">Lista de Productos en Inventario</h5>
                         <div class="d-flex gap-2">
                             <a href="{{ route('inventory.low-stock') }}" class="btn btn-warning">
-                                <i class="ri-alert-line align-middle me-1"></i> Stock Bajo
+                                <i class="fas fa-exclamation-triangle align-middle me-1"></i> Stock Bajo
                             </a>
                             <a href="{{ route('inventory.report') }}" class="btn btn-info">
-                                <i class="ri-file-chart-line align-middle me-1"></i> Reporte
+                                <i class="fas fa-chart-bar align-middle me-1"></i> Reporte
                             </a>
                         </div>
                     </div>
@@ -62,20 +62,20 @@
                                             {{ $inventory->current_stock }}
                                         </span>
                                     </td>
-                                    <td>{{ $inventory->min_stock }}</td>
-                                    <td>${{ number_format($inventory->unit_price, 2) }}</td>
+                                    <td>{{ $inventory->product->minimum_stock ?? 0 }}</td>
+                                    <td>${{ number_format($inventory->product->cost_price ?? 0, 2) }}</td>
                                     <td>
                                         <span class="badge bg-{{ $inventory->current_stock > 0 ? 'success' : 'danger' }}">
                                             {{ $inventory->current_stock > 0 ? 'Disponible' : 'Agotado' }}
                                         </span>
                                     </td>
                                     <td>
-                                        <div class="d-flex gap-2">
-                                            <a href="{{ route('inventory.show', $inventory) }}" class="btn btn-sm btn-outline-primary">
-                                                <i class="ri-eye-line"></i>
+                                        <div class="d-flex gap-1">
+                                            <a href="{{ route('inventory.show', $inventory) }}" class="btn btn-sm btn-outline-primary" title="Ver inventario" aria-label="Ver inventario">
+                                                <i class="fas fa-eye"></i>
                                             </a>
-                                            <button class="btn btn-sm btn-outline-warning" onclick="adjustStock({{ $inventory->id }})">
-                                                <i class="ri-edit-line"></i>
+                                            <button type="button" class="btn btn-sm btn-outline-warning" title="Ajustar stock" aria-label="Ajustar stock" onclick="adjustStock({{ $inventory->id }})">
+                                                <i class="fas fa-edit"></i>
                                             </button>
                                         </div>
                                     </td>
