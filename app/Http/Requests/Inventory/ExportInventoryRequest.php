@@ -14,7 +14,7 @@ class ExportInventoryRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'format' => ['nullable', 'string', 'in:csv'],
+            'format' => ['nullable', 'string', 'in:csv,xlsx,pdf'],
             'inventory_location_id' => ['nullable', 'integer', 'exists:inventory_locations,id'],
             'category' => ['sometimes', 'string', 'max:100'],
             'stock_level' => ['nullable', 'string', 'in:low,out,normal'],

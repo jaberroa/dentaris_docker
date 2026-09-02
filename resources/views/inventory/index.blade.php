@@ -161,13 +161,13 @@
                             <div class="text-muted small"><i class="fas fa-info-circle me-1"></i>Mostrando {{ $inventories->count() }} de {{ $inventories->total() }} productos</div>
                         </div>
                         @if(auth()->user()?->hasPermission('export_inventory'))
-                            <div class="dropdown"><button class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown"><i class="fas fa-download me-1"></i>Exportar</button><div class="dropdown-menu dropdown-menu-end"><form method="POST" action="{{ route('inventory.export') }}">@csrf<input type="hidden" name="category" value="{{ request('category') }}"><input type="hidden" name="stock_level" value="{{ request('stock_level') }}"><button class="dropdown-item" type="submit"><i class="fas fa-file-csv me-2 text-success"></i>CSV - filtros actuales</button></form><div class="dropdown-divider"></div><form method="POST" action="{{ route('inventory.export') }}">@csrf<button class="dropdown-item" type="submit"><i class="fas fa-file-csv me-2 text-success"></i>CSV - todos</button></form></div></div>
+                            <div class="dropdown"><button class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown"><i class="fas fa-download me-1"></i>Exportar</button><div class="dropdown-menu dropdown-menu-end">@foreach(['pdf' => ['fa-file-pdf', 'text-danger', 'PDF'], 'xlsx' => ['fa-file-excel', 'text-success', 'Excel'], 'csv' => ['fa-file-csv', 'text-primary', 'CSV']] as $format => [$icon, $color, $label])<form method="POST" action="{{ route('inventory.export') }}">@csrf<input type="hidden" name="format" value="{{ $format }}"><input type="hidden" name="category" value="{{ request('category') }}"><input type="hidden" name="stock_level" value="{{ request('stock_level') }}"><button class="dropdown-item" type="submit"><i class="fas {{ $icon }} me-2 {{ $color }}"></i>{{ $label }} - filtros actuales</button></form>@endforeach<div class="dropdown-divider"></div>@foreach(['pdf' => ['fa-file-pdf', 'text-danger', 'PDF'], 'xlsx' => ['fa-file-excel', 'text-success', 'Excel'], 'csv' => ['fa-file-csv', 'text-primary', 'CSV']] as $format => [$icon, $color, $label])<form method="POST" action="{{ route('inventory.export') }}">@csrf<input type="hidden" name="format" value="{{ $format }}"><button class="dropdown-item" type="submit"><i class="fas {{ $icon }} me-2 {{ $color }}"></i>{{ $label }} - todos</button></form>@endforeach</div></div>
                         @endif
                     </div>
                 </div>
                 <div class="card-body">
                     <div class="table-responsive">
-                        <table class="table table-hover mb-0 inventory-table">
+                        <table class="table table-hover">
                             <thead>
                                 <tr>
                                     <th><a href="{{ $inventorySortUrl('product') }}">ID <i class="{{ $inventorySortIcon('product') }}"></i></a></th>

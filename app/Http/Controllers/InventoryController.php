@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Data\InventoryMovementData;
+use App\Exports\InventoryExport;
 use App\Http\Requests\Inventory\CreateInventoryAdjustmentRequest;
 use App\Http\Requests\Inventory\ExportInventoryRequest;
 use App\Http\Requests\Inventory\TransferInventoryRequest;
@@ -17,6 +18,8 @@ use App\Services\InventoryMovementService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Maatwebsite\Excel\Facades\Excel;
 use InvalidArgumentException;
 use RuntimeException;
 
@@ -217,11 +220,16 @@ class InventoryController extends Controller
         $limit = $filters['limit'] ?? 10000;
         $query = $exportRepository->query($filters)->orderBy('id')->limit($limit);
         $rows = (clone $query)->count();
+        $format = $filters['format'] ?? 'csv';
 
         activity('inventory')
             ->causedBy($request->user())
-            ->withProperties(['filters' => $filters, 'rows' => $rows, 'format' => 'csv'])
+            ->withProperties(['filters' => $filters, 'rows' => $rows, 'format' => $format])
             ->log('inventory.exported');
+
+        $filename = 'inventario_'.now()->format('Y-m-d_H-i-s');
+        if ($format === 'xlsx') return Excel::download(new InventoryExport($filters), $filename.'.xlsx');
+        if ($format === 'pdf') return Pdf::loadView('inventory.export-pdf', ['inventories' => $query->get(), 'filters' => $filters])->setPaper('A4', 'landscape')->download($filename.'.pdf');
 
         return response()->streamDownload(function () use ($query): void {
             $output = fopen('php://output', 'w');
@@ -240,7 +248,7 @@ class InventoryController extends Controller
                 }
             });
             fclose($output);
-        }, 'inventario_'.now()->format('Y-m-d_H-i-s').'.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
+        }, $filename.'.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
     public function lowStock()

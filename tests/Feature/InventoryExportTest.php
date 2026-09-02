@@ -31,6 +31,14 @@ class InventoryExportTest extends TestCase
         $this->actingAs($user)->post(route('inventory.export'))->assertForbidden();
     }
 
+    public function test_user_with_export_permission_can_download_excel_and_pdf(): void
+    {
+        [$user] = $this->fixture(['export_inventory']);
+
+        $this->actingAs($user)->post(route('inventory.export'), ['format' => 'xlsx'])->assertOk();
+        $this->actingAs($user)->post(route('inventory.export'), ['format' => 'pdf'])->assertOk();
+    }
+
     private function fixture(array $permissions): array
     {
         $user = User::factory()->create();
