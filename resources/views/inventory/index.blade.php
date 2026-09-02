@@ -50,6 +50,11 @@
                         <a href="{{ route('inventory.low-stock') }}" class="btn btn-warning">
                             <i class="fas fa-exclamation-triangle me-1"></i>Stock Bajo
                         </a>
+                        @if(auth()->user()?->hasPermission('manage_inventory'))
+                            <a href="{{ route('inventory.locations.index') }}" class="btn btn-outline-info">
+                                <i class="fas fa-map-marker-alt me-1"></i>Ubicaciones
+                            </a>
+                        @endif
                     </div>
                 </div>
             </div>
@@ -155,6 +160,7 @@
                                     <th>ID</th>
                                     <th>Producto</th>
                                     <th>Categoría</th>
+                                    <th>Ubicación</th>
                                     <th>Stock Actual</th>
                                     <th>Stock Mínimo</th>
                                     <th>Precio</th>
@@ -168,6 +174,7 @@
                                     <td>{{ $inventory->id }}</td>
                                     <td>{{ $inventory->product->name ?? 'N/A' }}</td>
                                     <td>{{ $inventory->product->category ?? 'N/A' }}</td>
+                                    <td>{{ $inventory->inventoryLocation->name ?? $inventory->location ?? 'Sin asignar' }}</td>
                                     <td>
                                         <span class="badge bg-{{ $inventory->available_stock <= ($inventory->product->minimum_stock ?? 0) ? 'danger' : 'success' }}">
                                             {{ $inventory->available_stock }}
@@ -189,6 +196,9 @@
                                                 <i class="fas fa-edit"></i>
                                             </button>
                                             @if(auth()->user()?->hasPermission('manage_inventory'))
+                                                <button type="button" class="btn btn-sm btn-outline-secondary" title="Agregar ubicación de stock" aria-label="Agregar ubicación de stock" data-bs-toggle="modal" data-bs-target="#addStockLocationModal" data-inventory-id="{{ $inventory->id }}" data-product-name="{{ $inventory->product->name ?? 'Producto' }}" data-source-location-id="{{ $inventory->inventory_location_id }}">
+                                                    <i class="fas fa-map-marker-alt"></i>
+                                                </button>
                                                 @php $hasTransferDestination = $transferDestinationsByProduct->get($inventory->product_id, collect())->count() > 1; @endphp
                                                 <button
                                                     type="button"
@@ -200,7 +210,7 @@
                                                     data-source-inventory-id="{{ $inventory->id }}"
                                                     data-product-id="{{ $inventory->product_id }}"
                                                     data-product-name="{{ $inventory->product->name ?? 'Producto' }}"
-                                                    data-source-location="{{ $inventory->location ?: 'Ubicación no definida' }}"
+                                                    data-source-location="{{ $inventory->inventoryLocation->name ?? $inventory->location ?? 'Ubicación no definida' }}"
                                                     data-available-stock="{{ $inventory->available_stock }}"
                                                     @disabled(! $hasTransferDestination)
                                                 >
@@ -233,7 +243,7 @@
     <template id="transfer-destinations-product-{{ $productId }}">
         @foreach($destinations as $destination)
             <option value="{{ $destination->id }}" data-inventory-id="{{ $destination->id }}">
-                {{ $destination->location ?: 'Ubicación no definida' }} · Disponible: {{ $destination->available_stock }}
+                {{ $destination->inventoryLocation->name ?? $destination->location ?? 'Ubicación no definida' }} · Disponible: {{ $destination->available_stock }}
             </option>
         @endforeach
     </template>
@@ -330,6 +340,36 @@
     </div>
 </div>
 
+<div class="modal fade" id="addStockLocationModal" tabindex="-1" aria-labelledby="addStockLocationModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title" id="addStockLocationModalLabel"><i class="fas fa-map-marker-alt text-secondary me-2"></i>Agregar ubicación de stock</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form method="POST" action="{{ route('inventory.locations.stock.store', ['inventory' => '__inventory__']) }}" data-action-template="{{ route('inventory.locations.stock.store', ['inventory' => '__inventory__']) }}" id="addStockLocationForm">
+                @csrf
+                <div class="modal-body p-4">
+                    <div class="alert alert-secondary d-flex gap-2" role="alert">
+                        <i class="fas fa-info-circle mt-1"></i>
+                        <div id="addStockLocationDescription">Se creará una existencia inicial de <strong>0</strong> unidades para poder recibir transferencias. No se mueve stock con esta acción.</div>
+                    </div>
+                    <p class="mb-3">Producto: <strong id="addStockLocationProductName">—</strong></p>
+                    <div class="mb-0">
+                        <label for="addStockLocationId" class="form-label">Nueva ubicación</label>
+                        <select name="inventory_location_id" id="addStockLocationId" class="form-select" required></select>
+                        <div id="addStockLocationHelp" class="form-text"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-secondary" id="addStockLocationSubmit"><i class="fas fa-plus me-1"></i>Crear existencia</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
 document.getElementById('adjustStockModal')?.addEventListener('show.bs.modal', function (event) {
     const button = event.relatedTarget;
@@ -371,6 +411,39 @@ document.getElementById('transferStockModal')?.addEventListener('show.bs.modal',
     destinationHelp.textContent = hasDestinations
         ? 'Solo se muestran ubicaciones que contienen este mismo producto.'
         : 'Este producto aún no tiene otra ubicación de inventario disponible para transferir.';
+});
+
+document.getElementById('addStockLocationModal')?.addEventListener('show.bs.modal', function (event) {
+    const button = event.relatedTarget;
+    const form = document.getElementById('addStockLocationForm');
+    const select = document.getElementById('addStockLocationId');
+    const sourceLocationId = button.dataset.sourceLocationId;
+    const submitButton = document.getElementById('addStockLocationSubmit');
+
+    form.reset();
+    form.action = form.dataset.actionTemplate.replace('__inventory__', button.dataset.inventoryId);
+    document.getElementById('addStockLocationProductName').textContent = button.dataset.productName;
+    select.innerHTML = '<option value="">Selecciona una ubicación</option>';
+
+    @foreach($activeInventoryLocations as $location)
+        if ('{{ $location->id }}' !== sourceLocationId) {
+            select.append(new Option(@js($location->name.' ('.$location->code.')'), '{{ $location->id }}'));
+        }
+    @endforeach
+
+    const hasLocations = select.options.length > 1;
+    select.disabled = !hasLocations;
+    submitButton.disabled = !hasLocations;
+    document.getElementById('addStockLocationHelp').textContent = hasLocations
+        ? 'Solo se muestran ubicaciones activas distintas al origen.'
+        : 'Crea primero una ubicación activa en el catálogo de ubicaciones.';
+    const isUnassigned = !sourceLocationId;
+    document.getElementById('addStockLocationDescription').innerHTML = isUnassigned
+        ? 'El inventario existente quedará asignado a la ubicación seleccionada. No se moverá stock con esta acción.'
+        : 'Se creará una existencia inicial de <strong>0</strong> unidades para poder recibir transferencias. No se mueve stock con esta acción.';
+    submitButton.innerHTML = isUnassigned
+        ? '<i class="fas fa-check me-1"></i>Asignar ubicación'
+        : '<i class="fas fa-plus me-1"></i>Crear existencia';
 });
 </script>
 @endsection

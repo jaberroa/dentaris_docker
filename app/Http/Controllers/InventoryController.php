@@ -7,6 +7,7 @@ use App\Http\Requests\Inventory\CreateInventoryAdjustmentRequest;
 use App\Http\Requests\Inventory\TransferInventoryRequest;
 use App\Models\Inventory;
 use App\Models\InventoryMovement;
+use App\Models\InventoryLocation;
 use App\Models\Product;
 use App\Models\Supplier;
 use App\Repositories\InventoryMovementRepository;
@@ -26,7 +27,7 @@ class InventoryController extends Controller
 
     public function index(Request $request)
     {
-        $query = Inventory::with(['product.primarySupplier']);
+        $query = Inventory::with(['product.primarySupplier', 'inventoryLocation']);
 
         // Filtros
         if ($request->filled('search')) {
@@ -80,13 +81,17 @@ class InventoryController extends Controller
         $categories = Product::select('category')->distinct()->pluck('category');
         $suppliers = Supplier::where('is_active', true)->get();
         $transferDestinationsByProduct = Inventory::query()
-            ->with('product:id,name')
+            ->with(['product:id,name', 'inventoryLocation:id,name'])
             ->orderBy('product_id')
             ->orderBy('location')
             ->get()
             ->groupBy('product_id');
+        $activeInventoryLocations = InventoryLocation::query()
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'code']);
 
-        return view('inventory.index', compact('inventories', 'categories', 'suppliers', 'transferDestinationsByProduct'));
+        return view('inventory.index', compact('inventories', 'categories', 'suppliers', 'transferDestinationsByProduct', 'activeInventoryLocations'));
     }
 
     public function show(Inventory $inventory)

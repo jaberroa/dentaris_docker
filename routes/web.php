@@ -12,6 +12,7 @@ use App\Http\Controllers\MedicalRecordController;
 use App\Http\Controllers\AppointmentController;
 use App\Http\Controllers\StaffController;
 use App\Http\Controllers\InventoryController;
+use App\Http\Controllers\InventoryLocationController;
 use App\Http\Controllers\LabWorkController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SupplierController;
@@ -124,6 +125,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/inventory/movements', [InventoryController::class, 'movements'])
         ->middleware('permission:view_inventory')
         ->name('inventory.movements');
+    Route::get('/inventory/locations', [InventoryLocationController::class, 'index'])
+        ->middleware('permission:view_inventory')
+        ->name('inventory.locations.index');
     Route::get('/inventory/low-stock', [InventoryController::class, 'lowStock'])->name('inventory.low-stock');
     Route::get('/inventory/out-of-stock', [InventoryController::class, 'outOfStock'])->name('inventory.out-of-stock');
     Route::get('/inventory/expiring-soon', [InventoryController::class, 'expiringSoon'])->name('inventory.expiring-soon');
@@ -133,10 +137,15 @@ Route::middleware('auth')->group(function () {
         ->name('inventory.show');
     
     Route::middleware('permission:manage_inventory')->group(function () {
+        Route::post('/inventory/locations', [InventoryLocationController::class, 'store'])->name('inventory.locations.store');
+        Route::put('/inventory/locations/{inventoryLocation}', [InventoryLocationController::class, 'update'])->name('inventory.locations.update');
         Route::put('/inventory/{inventory}', [InventoryController::class, 'update'])
             ->middleware('can:update,inventory')
             ->name('inventory.update');
         Route::post('/inventory/transfer', [InventoryController::class, 'transfer'])->name('inventory.transfer');
+        Route::post('/inventory/{inventory}/locations', [InventoryLocationController::class, 'createStockLocation'])
+            ->middleware('can:update,inventory')
+            ->name('inventory.locations.stock.store');
         Route::post('/inventory/export', [InventoryController::class, 'export'])->name('inventory.export');
     });
 

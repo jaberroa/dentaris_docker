@@ -13,6 +13,7 @@ class Inventory extends Model
 
     protected $fillable = [
         'product_id', 'current_stock', 'reserved_stock', 'available_stock', 'average_cost',
+        'inventory_location_id',
         'last_restocked', 'last_used', 'location', 'notes', 'low_stock_alert',
         'out_of_stock_alert', 'expiry_alert'
     ];
@@ -33,6 +34,11 @@ class Inventory extends Model
     public function product()
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function inventoryLocation()
+    {
+        return $this->belongsTo(InventoryLocation::class);
     }
 
     public function movements()
