@@ -2,9 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Data\InventoryMovementData;
+use App\Http\Requests\Inventory\CreateInventoryAdjustmentRequest;
 use App\Models\Inventory;
 use App\Models\Product;
 use App\Models\Supplier;
+use App\Services\InventoryMovementService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -101,6 +104,28 @@ class InventoryController extends Controller
 
         return redirect()->route('inventory.show', $inventory)
             ->with('success', 'Inventario actualizado correctamente');
+    }
+
+    public function adjust(CreateInventoryAdjustmentRequest $request, InventoryMovementService $movementService)
+    {
+        $data = $request->validated();
+        $movement = $movementService->adjust(
+            new InventoryMovementData(
+                (int) $data['inventory_id'],
+                (int) $data['product_id'],
+                $data['type'],
+                (int) $data['quantity'],
+                $data['reason'],
+            ),
+            $request->user(),
+        );
+
+        if ($request->expectsJson()) {
+            return response()->json(['data' => $movement], 201);
+        }
+
+        return redirect()->route('inventory.show', $movement->inventory_id)
+            ->with('success', 'Movimiento de inventario registrado correctamente');
     }
 
     public function lowStock()
