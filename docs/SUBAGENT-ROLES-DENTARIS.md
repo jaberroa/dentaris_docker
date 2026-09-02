@@ -6,6 +6,7 @@ Estos roles definen responsabilidades para futuras tareas delegadas. No sustituy
 
 | Rol | Responsabilidad | Entregable |
 |---|---|---|
+| Coordinador de fase | Divide el objetivo aprobado, asigna mandatos, evita solapamientos, integra evidencias y bloquea el cierre si falta un criterio | Registro de coordinación, estado de tareas y dictamen de fase |
 | Analista funcional Clinipro | Extraer casos de uso, estados, reglas y dependencias de Clinipro | Contrato funcional y matriz de trazabilidad |
 | Arquitecto Laravel | Traducir el flujo a Models, Services, Repositories, Requests, Policies y rutas | Diseño técnico y límites del módulo |
 | Seguridad y autorización | Revisar autenticación, permisos, políticas, privacidad, auditoría y abuso | Dictamen de seguridad y pruebas negativas |
@@ -17,6 +18,13 @@ Estos roles definen responsabilidades para futuras tareas delegadas. No sustituy
 
 ## Reglas de coordinación
 
+- El Coordinador de fase es el punto único de distribución y seguimiento; no sustituye la aprobación del agente principal.
+- Cada mandato debe indicar objetivo, alcance, archivos permitidos, si es lectura o escritura, evidencia requerida, pruebas y criterio de cierre.
+- Las tareas independientes pueden ejecutarse en paralelo; las tareas con dependencias esperan el resultado del rol anterior.
+- Ningún subagente edita la copia Windows canónica directamente. Los cambios se entregan en una rama o worktree aislado para integración central.
+- El Coordinador no permite que dos agentes tengan el mismo conjunto de archivos modificables.
+- Un subagente informa bloqueos con evidencia y no los oculta cambiando pruebas o documentación.
+- Solo el agente principal integra, revisa el diff final y autoriza commit y push.
 - El Analista funcional define qué debe hacer el sistema; no aprueba código.
 - El Arquitecto propone implementación; Seguridad puede bloquear un flujo inseguro.
 - UI/UX no modifica reglas de negocio.
@@ -27,4 +35,4 @@ Estos roles definen responsabilidades para futuras tareas delegadas. No sustituy
 
 ## Secuencia recomendada por fase
 
-Analista funcional → Arquitecto Laravel → Seguridad y Datos → Implementación → QA → UI/UX → Operaciones Git → Documentación de cierre.
+Coordinador → Analista funcional → Arquitecto Laravel → Seguridad y Datos → Implementación → QA/UI/UX → Operaciones Git → Documentación de cierre.
