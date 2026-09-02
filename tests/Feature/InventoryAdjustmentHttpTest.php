@@ -13,9 +13,9 @@ class InventoryAdjustmentHttpTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_authorized_user_can_adjust_inventory_over_http(): void
+    public function test_user_with_adjust_permission_can_adjust_inventory_over_http(): void
     {
-        [$user, $inventory] = $this->fixture(['manage_inventory', 'adjust_inventory']);
+        [$user, $inventory] = $this->fixture(['adjust_inventory']);
 
         $response = $this->actingAs($user)->postJson(
             route('inventory.adjust', $inventory),
@@ -57,7 +57,7 @@ class InventoryAdjustmentHttpTest extends TestCase
 
     public function test_invalid_adjustment_is_rejected_before_persistence(): void
     {
-        [$user, $inventory] = $this->fixture(['manage_inventory', 'adjust_inventory']);
+        [$user, $inventory] = $this->fixture(['adjust_inventory']);
 
         $this->actingAs($user)
             ->postJson(route('inventory.adjust', $inventory), [

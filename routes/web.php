@@ -133,12 +133,13 @@ Route::middleware('auth')->group(function () {
         Route::put('/inventory/{inventory}', [InventoryController::class, 'update'])
             ->middleware('can:update,inventory')
             ->name('inventory.update');
-        Route::post('/inventory/{inventory}/adjust', [InventoryController::class, 'adjust'])
-            ->middleware('can:adjust,inventory')
-            ->name('inventory.adjust');
         Route::post('/inventory/transfer', [InventoryController::class, 'transfer'])->name('inventory.transfer');
         Route::post('/inventory/export', [InventoryController::class, 'export'])->name('inventory.export');
     });
+
+    Route::post('/inventory/{inventory}/adjust', [InventoryController::class, 'adjust'])
+        ->middleware('can:adjust,inventory')
+        ->name('inventory.adjust');
     
     // Gestión de Facturación
     Route::get('/billing', [BillingController::class, 'index'])->name('billing.index');
