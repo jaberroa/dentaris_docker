@@ -35,6 +35,11 @@ class Inventory extends Model
         return $this->belongsTo(Product::class);
     }
 
+    public function movements()
+    {
+        return $this->hasMany(InventoryMovement::class);
+    }
+
     // Scopes
     public function scopeLowStock($query)
     {
