@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Data\InventoryMovementData;
 use App\Http\Requests\Inventory\CreateInventoryAdjustmentRequest;
+use App\Http\Requests\Inventory\TransferInventoryRequest;
 use App\Models\Inventory;
 use App\Models\InventoryMovement;
 use App\Models\Product;
@@ -12,6 +13,9 @@ use App\Repositories\InventoryMovementRepository;
 use App\Services\InventoryMovementService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+use InvalidArgumentException;
+use RuntimeException;
 
 class InventoryController extends Controller
 {
@@ -169,6 +173,30 @@ class InventoryController extends Controller
 
         return redirect()->route('inventory.show', $reversal->inventory_id)
             ->with('success', 'Movimiento revertido correctamente.');
+    }
+
+    public function transfer(TransferInventoryRequest $request, InventoryMovementService $movementService)
+    {
+        $data = $request->validated();
+
+        try {
+            $transfer = $movementService->transfer(
+                (int) $data['inventory_id'],
+                (int) $data['destination_inventory_id'],
+                (int) $data['quantity'],
+                $data['reason'],
+                $request->user(),
+            );
+        } catch (InvalidArgumentException | RuntimeException $exception) {
+            throw ValidationException::withMessages(['quantity' => $exception->getMessage()]);
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json(['data' => $transfer], 201);
+        }
+
+        return redirect()->route('inventory.show', $transfer['outgoing']->inventory_id)
+            ->with('success', 'Transferencia registrada correctamente.');
     }
 
     public function lowStock()

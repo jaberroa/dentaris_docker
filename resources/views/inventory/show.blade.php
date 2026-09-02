@@ -84,9 +84,10 @@
                                         <th>Tipo</th>
                                         <th>Cantidad</th>
                                         <th>Stock</th>
-                                    <th>Motivo</th>
-                                    <th>Registrado por</th>
-                                    <th class="text-end">Acciones</th>
+                                        <th>Trayecto</th>
+                                        <th>Motivo</th>
+                                        <th>Registrado por</th>
+                                        <th class="text-end">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -95,6 +96,8 @@
                                             $movementType = match($movement->type) {
                                                 'restock' => ['label' => 'Entrada', 'color' => 'success', 'icon' => 'fa-arrow-down'],
                                                 'consumption' => ['label' => 'Salida', 'color' => 'danger', 'icon' => 'fa-arrow-up'],
+                                                'transfer_out' => ['label' => 'Transferida', 'color' => 'primary', 'icon' => 'fa-share'],
+                                                'transfer_in' => ['label' => 'Recibida', 'color' => 'info', 'icon' => 'fa-share'],
                                                 default => ['label' => 'Ajuste', 'color' => 'warning', 'icon' => 'fa-sliders-h'],
                                             };
                                         @endphp
@@ -103,10 +106,17 @@
                                             <td><span class="badge bg-{{ $movementType['color'] }}"><i class="fas {{ $movementType['icon'] }} me-1"></i>{{ $movementType['label'] }}</span></td>
                                             <td class="fw-semibold">{{ $movement->quantity }}</td>
                                             <td>{{ $movement->stock_before }} <i class="fas fa-arrow-right text-muted mx-1"></i> {{ $movement->stock_after }}</td>
+                                            <td class="small text-muted">
+                                                @if(in_array($movement->type, ['transfer_out', 'transfer_in'], true))
+                                                    {{ $movement->source_location }} <i class="fas fa-arrow-right mx-1"></i> {{ $movement->destination_location }}
+                                                @else
+                                                    —
+                                                @endif
+                                            </td>
                                             <td>{{ $movement->reason ?: 'Sin motivo indicado' }}</td>
                                             <td>{{ $movement->user->name ?? 'Sistema' }}</td>
                                             <td class="text-end">
-                                                @if($movement->reference_type !== \App\Models\InventoryMovement::class && !in_array($movement->id, $reversedMovementIds, true))
+                                                @if($movement->reference_type !== \App\Models\InventoryMovement::class && empty($movement->metadata['transfer_id']) && !in_array($movement->id, $reversedMovementIds, true))
                                                     <button
                                                         type="button"
                                                         class="btn btn-sm btn-outline-danger"

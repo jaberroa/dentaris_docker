@@ -51,6 +51,14 @@ class DomainPolicyTest extends TestCase
         $this->assertFalse($policy->reverse($this->userWithPermissions(['manage_inventory']), $movement));
     }
 
+    public function test_inventory_transfer_movements_cannot_be_reverted_individually(): void
+    {
+        $policy = new InventoryMovementPolicy();
+        $movement = new InventoryMovement(['metadata' => ['transfer_id' => 'transfer-test']]);
+
+        $this->assertFalse($policy->reverse($this->userWithPermissions(['adjust_inventory']), $movement));
+    }
+
     private function userWithPermissions(array $permissions): User
     {
         $user = new User();

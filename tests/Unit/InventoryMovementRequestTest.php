@@ -24,11 +24,11 @@ class InventoryMovementRequestTest extends TestCase
         }
     }
 
-    public function test_transfer_request_requires_different_locations(): void
+    public function test_transfer_request_requires_different_inventories(): void
     {
         $rules = (new TransferInventoryRequest())->rules();
 
-        $this->assertContains('different:source_location', $rules['destination_location']);
+        $this->assertContains('different:inventory_id', $rules['destination_inventory_id']);
         $this->assertContains('min:1', $rules['quantity']);
     }
 }

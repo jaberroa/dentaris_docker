@@ -15,10 +15,8 @@ class TransferInventoryRequest extends FormRequest
     {
         return [
             'inventory_id' => ['required', 'integer', 'exists:inventory,id'],
-            'product_id' => ['required', 'integer', 'exists:products,id'],
+            'destination_inventory_id' => ['required', 'integer', 'different:inventory_id', 'exists:inventory,id'],
             'quantity' => ['required', 'integer', 'min:1'],
-            'source_location' => ['required', 'string', 'max:255'],
-            'destination_location' => ['required', 'string', 'different:source_location', 'max:255'],
             'reason' => ['required', 'string', 'max:255'],
         ];
     }
