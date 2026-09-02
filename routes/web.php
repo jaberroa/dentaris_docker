@@ -132,7 +132,7 @@ Route::middleware('auth')->group(function () {
         ->middleware('can:view,inventory')
         ->name('inventory.show');
     
-    Route::middleware('can:manage_inventory')->group(function () {
+    Route::middleware('permission:manage_inventory')->group(function () {
         Route::put('/inventory/{inventory}', [InventoryController::class, 'update'])
             ->middleware('can:update,inventory')
             ->name('inventory.update');
