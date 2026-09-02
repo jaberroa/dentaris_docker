@@ -34,7 +34,7 @@ class InventoryMovementServiceTest extends TestCase
         $this->assertSame('Compra recibida', $movement->reason);
         $this->assertDatabaseHas('activity_log', [
             'subject_type' => InventoryMovement::class,
-            'subject_id' => $inventory->id,
+            'subject_id' => $movement->id,
             'causer_id' => $user->id,
             'log_name' => 'inventory',
             'description' => 'inventory.movement.created',

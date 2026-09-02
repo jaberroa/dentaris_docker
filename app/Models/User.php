@@ -187,6 +187,10 @@ class User extends Authenticatable
      */
     public function can($permission, $arguments = [])
     {
+        if ($arguments !== [] && $arguments !== null) {
+            return parent::can($permission, $arguments);
+        }
+
         return $this->hasPermission($permission);
     }
 
