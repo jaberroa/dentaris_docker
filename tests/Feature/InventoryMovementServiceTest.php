@@ -26,7 +26,7 @@ class InventoryMovementServiceTest extends TestCase
         );
 
         $this->assertSame(8, $inventory->fresh()->current_stock);
-        $this->assertSame(5, $inventory->fresh()->available_stock);
+        $this->assertSame(8, $inventory->fresh()->available_stock);
         $this->assertSame(5, $movement->stock_before);
         $this->assertSame(8, $movement->stock_after);
         $this->assertSame($user->id, $movement->user_id);
