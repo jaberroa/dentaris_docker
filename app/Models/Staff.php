@@ -2,8 +2,12 @@
 
 namespace App\Models;
 
+use App\Modules\Clinics\Models\Clinic;
+use App\Modules\Clinics\Data\ClinicContext;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Builder;
 
 class Staff extends Model
 {
@@ -45,6 +49,23 @@ class Staff extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Clínica propietaria del perfil profesional.
+     */
+    public function clinic(): BelongsTo
+    {
+        return $this->belongsTo(Clinic::class);
+    }
+
+    /**
+     * Limita consultas de forma explícita a una clínica; no es un global scope
+     * mientras las rutas heredadas continúen en transición.
+     */
+    public function scopeForClinic(Builder $query, ClinicContext $context): Builder
+    {
+        return $query->where('clinic_id', $context->clinicId);
     }
 
     /**

@@ -2,8 +2,12 @@
 
 namespace App\Models;
 
+use App\Modules\Clinics\Models\Clinic;
+use App\Modules\Clinics\Data\ClinicContext;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Builder;
 
 class Patient extends Model
 {
@@ -61,6 +65,24 @@ class Patient extends Model
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /**
+     * Clínica propietaria del registro. La asignación se hace en servidor
+     * desde un contexto clínico validado, nunca desde una entrada libre.
+     */
+    public function clinic(): BelongsTo
+    {
+        return $this->belongsTo(Clinic::class);
+    }
+
+    /**
+     * Limita consultas de forma explícita a una clínica; no es un global scope
+     * para preservar el comportamiento de las rutas heredadas durante la transición.
+     */
+    public function scopeForClinic(Builder $query, ClinicContext $context): Builder
+    {
+        return $query->where('clinic_id', $context->clinicId);
     }
 
     /**

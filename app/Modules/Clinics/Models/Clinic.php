@@ -2,6 +2,8 @@
 
 namespace App\Modules\Clinics\Models;
 
+use App\Models\Patient;
+use App\Models\Staff;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -36,5 +38,15 @@ class Clinic extends Model
     public function settings(): HasMany
     {
         return $this->hasMany(ClinicSetting::class);
+    }
+
+    public function patients(): HasMany
+    {
+        return $this->hasMany(Patient::class);
+    }
+
+    public function staff(): HasMany
+    {
+        return $this->hasMany(Staff::class);
     }
 }
