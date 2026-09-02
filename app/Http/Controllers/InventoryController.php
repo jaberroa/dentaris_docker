@@ -61,23 +61,21 @@ class InventoryController extends Controller
             }
         }
 
-        // Ordenamiento
-        $sortBy = $request->get('sort_by', 'product.name');
+        $sortBy = $request->get('sort_by', 'product');
         $sortOrder = $request->get('sort_order', 'asc');
-
-        switch ($sortBy) {
-            case 'stock':
-                $query->orderBy('available_stock', $sortOrder);
-                break;
-            case 'value':
-                $query->orderByRaw('current_stock * average_cost ' . $sortOrder);
-                break;
-            default:
-                $query->join('products', 'inventory.product_id', '=', 'products.id')
-                      ->orderBy('products.name', $sortOrder);
-        }
-
-        $inventories = $query->paginate(20);
+        $sortOrder = in_array($sortOrder, ['asc', 'desc'], true) ? $sortOrder : 'asc';
+        $sortBy = in_array($sortBy, ['product', 'category', 'location', 'stock', 'value'], true) ? $sortBy : 'product';
+        $query->select('inventory.*')->join('products', 'inventory.product_id', '=', 'products.id')->leftJoin('inventory_locations', 'inventory.inventory_location_id', '=', 'inventory_locations.id');
+        match ($sortBy) {
+            'category' => $query->orderBy('products.category', $sortOrder),
+            'location' => $query->orderByRaw('COALESCE(inventory_locations.name, inventory.location) '.$sortOrder),
+            'stock' => $query->orderBy('inventory.available_stock', $sortOrder),
+            'value' => $query->orderByRaw('inventory.current_stock * inventory.average_cost '.$sortOrder),
+            default => $query->orderBy('products.name', $sortOrder),
+        };
+        $perPage = $request->get('per_page', 10);
+        $perPage = in_array((string) $perPage, ['10', '25', '50', '100'], true) ? (int) $perPage : 10;
+        $inventories = $query->paginate($perPage)->withQueryString();
 
         // Datos para filtros
         $categories = Product::select('category')->distinct()->pluck('category');
@@ -94,7 +92,7 @@ class InventoryController extends Controller
             ->get(['id', 'name', 'code']);
         $exportLocations = InventoryLocation::query()->orderBy('name')->get(['id', 'name', 'code']);
 
-        return view('inventory.index', compact('inventories', 'categories', 'suppliers', 'transferDestinationsByProduct', 'activeInventoryLocations', 'exportLocations'));
+        return view('inventory.index', compact('inventories', 'categories', 'suppliers', 'transferDestinationsByProduct', 'activeInventoryLocations', 'exportLocations', 'perPage', 'sortBy', 'sortOrder'));
     }
 
     public function show(Inventory $inventory)

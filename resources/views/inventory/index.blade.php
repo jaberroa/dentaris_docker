@@ -4,7 +4,7 @@
 
 @section('css')
 <style>
-    .inventory-table-controls {
+    .table-controls {
         background-color: #f8f9fa;
         border: 1px solid #e9ecef;
         border-radius: .5rem;
@@ -30,6 +30,13 @@
     .inventory-table tbody tr:hover {
         background-color: rgba(13, 110, 253, .035);
     }
+
+    .table th a { display: flex; align-items: center; justify-content: space-between; color: inherit !important; text-decoration: none !important; }
+    .table th a:hover { color: #0d6efd !important; }
+    .table th a .sort-icon { font-size: 12px; opacity: .5; margin-left: .5rem; }
+    .table th a .sort-icon.active { opacity: 1; color: #0d6efd; }
+    .per-page-selector { background-color: #fff; border: 1px solid #e9ecef; border-radius: .375rem; box-shadow: 0 1px 3px rgba(0, 0, 0, .1); }
+    .per-page-label { font-size: .875rem; font-weight: 500; color: #6c757d; }
 </style>
 @endsection
 
@@ -47,9 +54,6 @@
                         <a href="{{ route('inventory.report') }}" class="btn btn-outline-primary">
                             <i class="fas fa-chart-bar me-1"></i>Reporte
                         </a>
-                        @if(auth()->user()?->hasPermission('export_inventory'))
-                            <button type="button" class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#exportInventoryModal"><i class="fas fa-file-csv me-1"></i>Exportar CSV</button>
-                        @endif
                         <a href="{{ route('inventory.low-stock') }}" class="btn btn-warning">
                             <i class="fas fa-exclamation-triangle me-1"></i>Stock Bajo
                         </a>
@@ -143,16 +147,22 @@
         <div class="col-12">
             <div class="card">
                 <div class="card-header">
-                    <div class="inventory-summary-icon me-2"><i class="fas fa-boxes"></i></div>
+                    <div class="card-icon"><i class="fas fa-boxes fs-14 text-muted"></i></div>
                     <h4 class="card-title mb-0">Lista de productos</h4>
                 </div>
-                <div class="inventory-table-controls">
+                @php
+                    $inventorySortUrl = fn ($field) => request()->fullUrlWithQuery(['sort_by' => $field, 'sort_order' => $sortBy === $field && $sortOrder === 'asc' ? 'desc' : 'asc']);
+                    $inventorySortIcon = fn ($field) => 'fas '.($sortBy === $field ? ($sortOrder === 'asc' ? 'fa-sort-up active' : 'fa-sort-down active') : 'fa-sort').' sort-icon';
+                @endphp
+                <div class="table-controls">
                     <div class="d-flex justify-content-between align-items-center">
-                        <div class="text-muted small">
-                            <i class="fas fa-info-circle me-1"></i>
-                            Mostrando {{ $inventories->count() }} de {{ $inventories->total() }} productos
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="d-flex align-items-center"><label class="per-page-label me-2 mb-0">Mostrar:</label><select class="form-select form-select-sm per-page-selector" style="width: 80px;" onchange="changeInventoryPerPage(this.value)">@foreach([10,25,50,100] as $size)<option value="{{ $size }}" @selected($perPage === $size)>{{ $size }}</option>@endforeach</select></div>
+                            <div class="text-muted small"><i class="fas fa-info-circle me-1"></i>Mostrando {{ $inventories->count() }} de {{ $inventories->total() }} productos</div>
                         </div>
-                        <span class="badge bg-light text-muted border">Página {{ $inventories->currentPage() }} de {{ $inventories->lastPage() }}</span>
+                        @if(auth()->user()?->hasPermission('export_inventory'))
+                            <div class="dropdown"><button class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown"><i class="fas fa-download me-1"></i>Exportar</button><div class="dropdown-menu dropdown-menu-end"><form method="POST" action="{{ route('inventory.export') }}">@csrf<input type="hidden" name="category" value="{{ request('category') }}"><input type="hidden" name="stock_level" value="{{ request('stock_level') }}"><button class="dropdown-item" type="submit"><i class="fas fa-file-csv me-2 text-success"></i>CSV - filtros actuales</button></form><div class="dropdown-divider"></div><form method="POST" action="{{ route('inventory.export') }}">@csrf<button class="dropdown-item" type="submit"><i class="fas fa-file-csv me-2 text-success"></i>CSV - todos</button></form></div></div>
+                        @endif
                     </div>
                 </div>
                 <div class="card-body">
@@ -160,13 +170,13 @@
                         <table class="table table-hover mb-0 inventory-table">
                             <thead>
                                 <tr>
-                                    <th>ID</th>
-                                    <th>Producto</th>
-                                    <th>Categoría</th>
-                                    <th>Ubicación</th>
-                                    <th>Stock Actual</th>
+                                    <th><a href="{{ $inventorySortUrl('product') }}">ID <i class="{{ $inventorySortIcon('product') }}"></i></a></th>
+                                    <th><a href="{{ $inventorySortUrl('product') }}">Producto <i class="{{ $inventorySortIcon('product') }}"></i></a></th>
+                                    <th><a href="{{ $inventorySortUrl('category') }}">Categoría <i class="{{ $inventorySortIcon('category') }}"></i></a></th>
+                                    <th><a href="{{ $inventorySortUrl('location') }}">Ubicación <i class="{{ $inventorySortIcon('location') }}"></i></a></th>
+                                    <th><a href="{{ $inventorySortUrl('stock') }}">Stock Actual <i class="{{ $inventorySortIcon('stock') }}"></i></a></th>
                                     <th>Stock Mínimo</th>
-                                    <th>Precio</th>
+                                    <th><a href="{{ $inventorySortUrl('value') }}">Precio <i class="{{ $inventorySortIcon('value') }}"></i></a></th>
                                     <th>Estado</th>
                                     <th>Acciones</th>
                                 </tr>
@@ -458,6 +468,13 @@ document.getElementById('addStockLocationModal')?.addEventListener('show.bs.moda
         ? '<i class="fas fa-check me-1"></i>Asignar ubicación'
         : '<i class="fas fa-plus me-1"></i>Crear existencia';
 });
+
+function changeInventoryPerPage(value) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('per_page', value);
+    url.searchParams.delete('page');
+    window.location.href = url.toString();
+}
 </script>
 @endsection
 
