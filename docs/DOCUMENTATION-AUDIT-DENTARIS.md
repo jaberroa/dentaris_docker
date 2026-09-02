@@ -1,7 +1,7 @@
 # Auditoría documental de Dentaris
 
-**Fecha de auditoría:** 2026-09-02  
-**Estado:** Fase 0 — cerrada con saneamiento documental  
+**Fecha de auditoría:** 2026-09-02
+**Estado:** Fase 0 — cerrada con saneamiento documental
 **Fuente de verdad:** código, pruebas y configuración actuales del repositorio
 
 ## Propósito

@@ -1,7 +1,7 @@
 # Protocolo del coordinador de fases de Dentaris
 
-**Estado:** aprobado para activarse al comenzar la Fase 1  
-**Ámbito:** Dentaris únicamente  
+**Estado:** aprobado para activarse al comenzar la Fase 1
+**Ámbito:** Dentaris únicamente
 **Copia canónica:** `C:\Users\LENOVO\Projects\dentaris_docker`
 
 ## Mandato
