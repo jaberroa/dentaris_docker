@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Data\InventoryMovementData;
 use App\Http\Requests\Inventory\CreateInventoryAdjustmentRequest;
+use App\Http\Requests\Inventory\ExportInventoryRequest;
 use App\Http\Requests\Inventory\TransferInventoryRequest;
 use App\Models\Inventory;
 use App\Models\InventoryMovement;
@@ -11,6 +12,7 @@ use App\Models\InventoryLocation;
 use App\Models\Product;
 use App\Models\Supplier;
 use App\Repositories\InventoryMovementRepository;
+use App\Repositories\InventoryExportRepository;
 use App\Services\InventoryMovementService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -90,8 +92,9 @@ class InventoryController extends Controller
             ->where('is_active', true)
             ->orderBy('name')
             ->get(['id', 'name', 'code']);
+        $exportLocations = InventoryLocation::query()->orderBy('name')->get(['id', 'name', 'code']);
 
-        return view('inventory.index', compact('inventories', 'categories', 'suppliers', 'transferDestinationsByProduct', 'activeInventoryLocations'));
+        return view('inventory.index', compact('inventories', 'categories', 'suppliers', 'transferDestinationsByProduct', 'activeInventoryLocations', 'exportLocations'));
     }
 
     public function show(Inventory $inventory)
@@ -208,6 +211,38 @@ class InventoryController extends Controller
 
         return redirect()->route('inventory.show', $transfer['outgoing']->inventory_id)
             ->with('success', 'Transferencia registrada correctamente.');
+    }
+
+    public function export(ExportInventoryRequest $request, InventoryExportRepository $exportRepository)
+    {
+        $filters = $request->validated();
+        $limit = $filters['limit'] ?? 10000;
+        $query = $exportRepository->query($filters)->orderBy('id')->limit($limit);
+        $rows = (clone $query)->count();
+
+        activity('inventory')
+            ->causedBy($request->user())
+            ->withProperties(['filters' => $filters, 'rows' => $rows, 'format' => 'csv'])
+            ->log('inventory.exported');
+
+        return response()->streamDownload(function () use ($query): void {
+            $output = fopen('php://output', 'w');
+            fwrite($output, "\xEF\xBB\xBF");
+            fputcsv($output, ['Código', 'Producto', 'Categoría', 'Ubicación', 'Stock actual', 'Reservado', 'Disponible', 'Costo promedio', 'Valor total', 'Estado'], ';');
+            $query->chunkById(250, function ($inventories) use ($output): void {
+                foreach ($inventories as $inventory) {
+                    $available = (int) $inventory->available_stock;
+                    $minimum = (int) ($inventory->product->minimum_stock ?? 0);
+                    fputcsv($output, [
+                        $inventory->product->product_code ?? '', $inventory->product->name ?? '', $inventory->product->category ?? '',
+                        $inventory->inventoryLocation->name ?? $inventory->location ?? 'Sin asignar', $inventory->current_stock, $inventory->reserved_stock,
+                        $available, number_format((float) $inventory->average_cost, 2, '.', ''), number_format($inventory->current_stock * $inventory->average_cost, 2, '.', ''),
+                        $available <= 0 ? 'Agotado' : ($available <= $minimum ? 'Stock bajo' : 'Disponible'),
+                    ], ';');
+                }
+            });
+            fclose($output);
+        }, 'inventario_'.now()->format('Y-m-d_H-i-s').'.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
     public function lowStock()

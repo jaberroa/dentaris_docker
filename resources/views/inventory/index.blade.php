@@ -47,6 +47,9 @@
                         <a href="{{ route('inventory.report') }}" class="btn btn-outline-primary">
                             <i class="fas fa-chart-bar me-1"></i>Reporte
                         </a>
+                        @if(auth()->user()?->hasPermission('export_inventory'))
+                            <button type="button" class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#exportInventoryModal"><i class="fas fa-file-csv me-1"></i>Exportar CSV</button>
+                        @endif
                         <a href="{{ route('inventory.low-stock') }}" class="btn btn-warning">
                             <i class="fas fa-exclamation-triangle me-1"></i>Stock Bajo
                         </a>
@@ -368,6 +371,16 @@
             </form>
         </div>
     </div>
+</div>
+
+<div class="modal fade" id="exportInventoryModal" tabindex="-1" aria-labelledby="exportInventoryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered"><div class="modal-content border-0 shadow">
+        <div class="modal-header bg-light"><h5 class="modal-title text-success" id="exportInventoryModalLabel"><i class="fas fa-file-csv me-2"></i>Exportar inventario</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button></div>
+        <form method="POST" action="{{ route('inventory.export') }}">@csrf<input type="hidden" name="format" value="csv">
+            <div class="modal-body p-4"><p class="text-muted">Descarga un CSV con existencias, stock reservado, disponibilidad y ubicación.</p><div class="row g-3"><div class="col-md-6"><label class="form-label" for="exportLocation">Ubicación</label><select class="form-select" id="exportLocation" name="inventory_location_id"><option value="">Todas</option>@foreach($exportLocations as $location)<option value="{{ $location->id }}">{{ $location->name }} ({{ $location->code }})</option>@endforeach</select></div><div class="col-md-6"><label class="form-label" for="exportCategory">Categoría</label><select class="form-select" id="exportCategory" name="category"><option value="">Todas</option>@foreach($categories as $category)<option value="{{ $category }}">{{ $category }}</option>@endforeach</select></div><div class="col-md-6"><label class="form-label" for="exportStockLevel">Estado</label><select class="form-select" id="exportStockLevel" name="stock_level"><option value="">Todos</option><option value="normal">Disponible</option><option value="low">Stock bajo</option><option value="out">Agotado</option></select></div></div></div>
+            <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-success"><i class="fas fa-download me-1"></i>Descargar CSV</button></div>
+        </form>
+    </div></div>
 </div>
 
 <script>

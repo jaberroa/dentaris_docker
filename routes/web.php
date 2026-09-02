@@ -146,7 +146,6 @@ Route::middleware('auth')->group(function () {
         Route::post('/inventory/{inventory}/locations', [InventoryLocationController::class, 'createStockLocation'])
             ->middleware('can:update,inventory')
             ->name('inventory.locations.stock.store');
-        Route::post('/inventory/export', [InventoryController::class, 'export'])->name('inventory.export');
     });
 
     Route::post('/inventory/{inventory}/adjust', [InventoryController::class, 'adjust'])
@@ -155,6 +154,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/inventory/movements/{movement}/reverse', [InventoryController::class, 'reverseMovement'])
         ->middleware('can:reverse,movement')
         ->name('inventory.movements.reverse');
+    Route::post('/inventory/export', [InventoryController::class, 'export'])
+        ->middleware('permission:export_inventory')
+        ->name('inventory.export');
     
     // Gestión de Facturación
     Route::get('/billing', [BillingController::class, 'index'])->name('billing.index');
