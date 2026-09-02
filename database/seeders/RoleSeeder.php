@@ -21,7 +21,7 @@ class RoleSeeder extends Seeder
                 'permissions' => [
                     'view_patients', 'manage_patients',
                     'view_appointments', 'manage_appointments',
-                    'view_inventory', 'manage_inventory',
+                    'view_inventory', 'manage_inventory', 'adjust_inventory',
                     'view_billing', 'manage_billing',
                     'view_reports', 'manage_reports',
                     'manage_notifications',

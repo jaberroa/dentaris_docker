@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Inventory;
 
+use App\Models\Inventory;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -9,7 +10,10 @@ class CreateInventoryAdjustmentRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->hasPermission('adjust_inventory') ?? false;
+        $inventory = $this->route('inventory');
+
+        return $inventory instanceof Inventory
+            && ($this->user()?->can('adjust', $inventory) ?? false);
     }
 
     public function rules(): array
