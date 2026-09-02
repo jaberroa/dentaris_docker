@@ -2,11 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Http\Requests\Inventory\CreateInventoryAdjustmentRequest;
 use App\Models\Inventory;
 use App\Models\Product;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Routing\Route;
+use Illuminate\Support\Facades\Gate;
 use Tests\TestCase;
 
 class InventoryAdjustmentHttpTest extends TestCase
@@ -16,6 +19,9 @@ class InventoryAdjustmentHttpTest extends TestCase
     public function test_user_with_adjust_permission_can_adjust_inventory_over_http(): void
     {
         [$user, $inventory] = $this->fixture(['adjust_inventory']);
+
+        $this->assertTrue(Gate::forUser($user)->allows('adjust', $inventory));
+        $this->assertTrue($this->adjustmentRequestFor($user, $inventory)->authorize());
 
         $response = $this->actingAs($user)->postJson(
             route('inventory.adjust', $inventory),
@@ -98,5 +104,17 @@ class InventoryAdjustmentHttpTest extends TestCase
         ]);
 
         return [$user, $inventory];
+    }
+
+    private function adjustmentRequestFor(User $user, Inventory $inventory): CreateInventoryAdjustmentRequest
+    {
+        $request = CreateInventoryAdjustmentRequest::create('/inventory/'.$inventory->id.'/adjust', 'POST');
+        $route = new Route('POST', 'inventory/{inventory}', static fn () => null);
+        $route->setParameter('inventory', $inventory);
+
+        $request->setRouteResolver(static fn () => $route);
+        $request->setUserResolver(static fn () => $user);
+
+        return $request;
     }
 }
