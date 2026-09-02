@@ -19,16 +19,19 @@ class InvoicePolicy
 
     public function update(User $user, Invoice $invoice): bool
     {
-        return $user->hasPermission('manage_billing') && !$invoice->isPaid();
+        return $user->hasPermission('manage_billing') && $invoice->isEditable();
     }
 
     public function delete(User $user, Invoice $invoice): bool
     {
-        return $user->hasPermission('manage_billing') && !$invoice->isPaid();
+        return $user->hasPermission('manage_billing')
+            && ! $invoice->isPaid()
+            && ! $invoice->payments()->exists()
+            && $invoice->status !== 'cancelled';
     }
 
     public function send(User $user, Invoice $invoice): bool
     {
-        return $user->hasPermission('manage_billing') && !$invoice->isPaid();
+        return $user->hasPermission('manage_billing') && in_array($invoice->status, ['draft', 'sent'], true) && !$invoice->isPaid();
     }
 }

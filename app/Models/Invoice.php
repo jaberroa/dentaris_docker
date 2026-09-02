@@ -126,6 +126,11 @@ class Invoice extends Model
         return $this->status === 'sent';
     }
 
+    public function isEditable(): bool
+    {
+        return $this->isDraft() && (! $this->exists || ! $this->payments()->exists());
+    }
+
     public function getPaymentPercentageAttribute()
     {
         if ($this->total_amount == 0) return 100;

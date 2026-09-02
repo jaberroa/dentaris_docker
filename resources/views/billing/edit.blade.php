@@ -1,0 +1,18 @@
+@extends('layouts.master')
+
+@section('title', 'Editar factura')
+
+@section('content')
+    <div class="row"><div class="col-12"><div class="page-title-box d-flex align-items-center justify-content-between"><div><h4 class="mb-2">Editar {{ $invoice->invoice_number }}</h4><p class="text-muted mb-3">Solo se puede modificar un borrador sin pagos registrados.</p></div><a class="btn btn-light" href="{{ route('billing.show', $invoice) }}"><i class="fas fa-arrow-left me-1"></i> Volver</a></div></div></div>
+    @if($errors->any())<div class="alert alert-danger"><i class="fas fa-exclamation-circle me-2"></i>Revisa los campos marcados antes de guardar.</div>@endif
+    <form method="POST" action="{{ route('billing.update', $invoice) }}">@csrf @method('PUT')
+        <div class="row">
+            <div class="col-xl-8"><div class="card"><div class="card-header"><div class="card-icon"><i class="fas fa-list fs-14 text-muted"></i></div><h4 class="card-title mb-0">Conceptos facturados</h4></div><div class="card-body"><div class="table-responsive"><table class="table table-hover"><thead><tr><th>Procedimiento</th><th>Cantidad</th><th>Precio</th></tr></thead><tbody>
+                @foreach(old('items', $invoice->items->map(fn ($item) => ['cdt_catalog_id' => $item->cdt_catalog_id, 'quantity' => $item->quantity, 'unit_price' => $item->unit_price])->all()) as $index => $item)
+                    <tr><td><select class="form-select @error("items.$index.cdt_catalog_id") is-invalid @enderror" name="items[{{ $index }}][cdt_catalog_id]" required><option value="">Seleccione</option>@foreach($cdtCatalog as $catalogItem)<option value="{{ $catalogItem->id }}" {{ (string) $item['cdt_catalog_id'] === (string) $catalogItem->id ? 'selected' : '' }}>{{ $catalogItem->cdt_code }} — {{ $catalogItem->procedure_name }}</option>@endforeach</select></td><td><input class="form-control" type="number" min="1" name="items[{{ $index }}][quantity]" value="{{ $item['quantity'] }}" required></td><td><input class="form-control" type="number" min="0" step="0.01" name="items[{{ $index }}][unit_price]" value="{{ $item['unit_price'] }}" required></td></tr>
+                @endforeach
+            </tbody></table></div><p class="text-muted small mb-0"><i class="fas fa-info-circle me-1"></i>La edición conserva la trazabilidad y recalcula los totales.</p></div></div></div>
+            <div class="col-xl-4"><div class="card"><div class="card-header"><h4 class="card-title mb-0">Datos generales</h4></div><div class="card-body"><div class="mb-3"><label class="form-label">Fecha</label><input class="form-control" type="date" name="invoice_date" value="{{ old('invoice_date', $invoice->invoice_date?->format('Y-m-d')) }}" required></div><div class="mb-3"><label class="form-label">Vencimiento</label><input class="form-control" type="date" name="due_date" value="{{ old('due_date', $invoice->due_date?->format('Y-m-d')) }}"></div><div class="mb-3"><label class="form-label">Impuesto (%)</label><input class="form-control" type="number" min="0" max="100" step="0.01" name="tax_rate" value="{{ old('tax_rate', $invoice->tax_rate) }}"></div><div class="mb-3"><label class="form-label">Descuento</label><input class="form-control" type="number" min="0" step="0.01" name="discount_amount" value="{{ old('discount_amount', $invoice->discount_amount) }}"></div><div class="mb-3"><label class="form-label">Notas</label><textarea class="form-control" name="notes" rows="4">{{ old('notes', $invoice->notes) }}</textarea></div><button class="btn btn-primary w-100"><i class="fas fa-save me-1"></i> Guardar cambios</button></div></div></div>
+        </div>
+    </form>
+@endsection

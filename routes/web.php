@@ -163,15 +163,19 @@ Route::middleware('auth')->group(function () {
     Route::get('/billing/{invoice}', [BillingController::class, 'show'])
         ->middleware('can:view,invoice')
         ->name('billing.show');
-    Route::get('/billing/{invoice}/pdf', [BillingController::class, 'downloadPdf'])->name('billing.pdf');
+    Route::get('/billing/{invoice}/pdf', [BillingController::class, 'downloadPdf'])->middleware('can:view,invoice')->name('billing.pdf');
     
-    Route::middleware('can:manage_billing')->group(function () {
+    Route::middleware('permission:manage_billing')->group(function () {
         Route::get('/billing/create', [BillingController::class, 'create'])->name('billing.create');
         Route::post('/billing', [BillingController::class, 'store'])->name('billing.store');
-        Route::get('/billing/{invoice}/edit', [BillingController::class, 'edit'])->name('billing.edit');
-        Route::put('/billing/{invoice}', [BillingController::class, 'update'])->name('billing.update');
-        Route::delete('/billing/{invoice}', [BillingController::class, 'destroy'])->name('billing.destroy');
-        Route::post('/billing/{invoice}/send', [BillingController::class, 'sendInvoice'])->name('billing.send');
+        Route::get('/billing/{invoice}/edit', [BillingController::class, 'edit'])
+            ->middleware('can:update,invoice')->name('billing.edit');
+        Route::put('/billing/{invoice}', [BillingController::class, 'update'])
+            ->middleware('can:update,invoice')->name('billing.update');
+        Route::delete('/billing/{invoice}', [BillingController::class, 'destroy'])
+            ->middleware('can:delete,invoice')->name('billing.destroy');
+        Route::post('/billing/{invoice}/send', [BillingController::class, 'sendInvoice'])
+            ->middleware('can:send,invoice')->name('billing.send');
     });
     
     // Gestión de Reportes
@@ -304,21 +308,6 @@ Route::middleware('auth')->group(function () {
 Route::fallback(function () {
     return view('errors.404');
 });
-    Route::middleware('can:manage_billing')->group(function () {
-
-        Route::get('/billing/create', [BillingController::class, 'create'])->name('billing.create');
-
-        Route::post('/billing', [BillingController::class, 'store'])->name('billing.store');
-
-        Route::get('/billing/{invoice}/edit', [BillingController::class, 'edit'])->name('billing.edit');
-
-        Route::put('/billing/{invoice}', [BillingController::class, 'update'])->name('billing.update');
-
-        Route::delete('/billing/{invoice}', [BillingController::class, 'destroy'])->name('billing.destroy');
-
-        Route::post('/billing/{invoice}/send', [BillingController::class, 'sendInvoice'])->name('billing.send');
-
-    });
     
     // Gestión de Trabajos de Laboratorio
 
