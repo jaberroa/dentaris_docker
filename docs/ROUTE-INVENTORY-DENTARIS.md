@@ -15,6 +15,8 @@ El conteo es estático sobre los archivos actuales y no sustituye la salida de `
 
 El 2026-09-01 se intentó ejecutar `php artisan route:list --json` en la copia Windows. La ejecución no inició porque falta `vendor/autoload.php`. No se instalaron dependencias ni se ejecutaron migraciones. Por tanto, el conteo anterior permanece como evidencia estática y la comparación real de URI, nombre, controlador y middleware debe ejecutarse posteriormente en `~/Dentaris_Docker` después de sincronizar con `git pull origin main`.
 
+La verificación equivalente se ejecutó posteriormente en WSL sobre `HEAD 289048c`, con bootstrap Laravel cargado y sin crear archivos. Resultado: 162 rutas (155 web, 5 API y 2 auxiliares), 0 duplicidades por método + URI, 62 sin `Authenticate`, 41 mutantes sin `Authorize:*`/`can:*` y 10 acciones de controlador inexistentes.
+
 ## Catálogo por superficie
 
 | Superficie | Recursos observados | Autorización explícita observada |
@@ -38,8 +40,16 @@ El 2026-09-01 se intentó ejecutar `php artisan route:list --json` en la copia W
 2. La autorización está expresada parcialmente por middleware `can:*` y parcialmente en constructores de controladores; requiere un estándar único.
 3. El API tiene autenticación global, pero no una matriz explícita de permisos por operación.
 4. Hay un `Route::resource` para planes dentales junto con rutas adicionales; debe verificarse la correspondencia exacta de métodos y nombres.
-5. La aceptación de esta fase exige ejecutar `route:list --json` en el entorno disponible, comparar URI/nombre/controlador/middleware y registrar duplicidades.
+5. Runtime confirmó 10 referencias a acciones ausentes, concentradas en `BillingController`, `InventoryController` y `NotificationController`.
+6. Hay 12 rutas GET de módulos sensibles sin autenticación ni permiso explícito; hay además 36 rutas mutantes con autenticación pero sin `Authorize:*`/`can:*`. Deben clasificarse antes de cualquier corrección.
+7. La aceptación de esta fase exige conservar la salida de `route:list --json`, comparar URI/nombre/controlador/middleware y registrar decisiones sobre cada hallazgo.
 
 ## Criterio de salida
 
 La matriz queda aprobada cuando cada declaración mutante tiene controlador, middleware, permiso, validación, auditoría y prueba identificables, y no existen rutas duplicadas sin decisión documentada.
+
+## Bloqueadores para implementación
+
+- No corregir las 10 acciones ausentes de forma aislada sin revisar el contrato esperado de cada flujo.
+- No añadir permisos masivamente sin identificar roles, Gates y comportamiento de usuario existente.
+- No considerar las 62 rutas sin `Authenticate` como vulnerabilidades automáticas: 14 son públicas esperadas, pero las restantes requieren decisión por dominio.
