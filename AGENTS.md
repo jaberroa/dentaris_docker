@@ -9,7 +9,7 @@ Este repositorio corresponde exclusivamente a Dentaris, un sistema de gestión d
 - MySQL
 - Blade
 - Vite
-- Metronic Tailwind demo1 como referencia visual objetivo
+- Clivax_Laravel_v1.1.0 como referencia visual objetivo
 
 ## Arquitectura
 
@@ -24,7 +24,7 @@ Este repositorio corresponde exclusivamente a Dentaris, un sistema de gestión d
 ## Referencias
 
 - `clinipro/` es una referencia funcional NodeJS/ReactJS. Solo se adaptan sus módulos y reglas de negocio al stack Laravel.
-- `Clivax_Laravel_v1.1.0/` es una referencia visual. No se copia su lógica ni su arquitectura.
+- `Clivax_Laravel_v1.1.0/` es una referencia exclusivamente visual. No se copia su lógica, arquitectura, dependencias, secretos ni datos de ejemplo.
 
 ## Reglas de alcance
 
