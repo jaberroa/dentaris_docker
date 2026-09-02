@@ -121,14 +121,18 @@ Route::middleware('auth')->group(function () {
     
     // Gestión de Inventario
     Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory.index');
-    Route::get('/inventory/{inventory}', [InventoryController::class, 'show'])->name('inventory.show');
+    Route::get('/inventory/{inventory}', [InventoryController::class, 'show'])
+        ->middleware('can:view,inventory')
+        ->name('inventory.show');
     Route::get('/inventory/low-stock', [InventoryController::class, 'lowStock'])->name('inventory.low-stock');
     Route::get('/inventory/out-of-stock', [InventoryController::class, 'outOfStock'])->name('inventory.out-of-stock');
     Route::get('/inventory/expiring-soon', [InventoryController::class, 'expiringSoon'])->name('inventory.expiring-soon');
     Route::get('/inventory/report', [InventoryController::class, 'report'])->name('inventory.report');
     
     Route::middleware('can:manage_inventory')->group(function () {
-        Route::put('/inventory/{inventory}', [InventoryController::class, 'update'])->name('inventory.update');
+        Route::put('/inventory/{inventory}', [InventoryController::class, 'update'])
+            ->middleware('can:update,inventory')
+            ->name('inventory.update');
         Route::post('/inventory/{inventory}/adjust', [InventoryController::class, 'adjust'])->name('inventory.adjust');
         Route::post('/inventory/transfer', [InventoryController::class, 'transfer'])->name('inventory.transfer');
         Route::post('/inventory/export', [InventoryController::class, 'export'])->name('inventory.export');
@@ -136,7 +140,9 @@ Route::middleware('auth')->group(function () {
     
     // Gestión de Facturación
     Route::get('/billing', [BillingController::class, 'index'])->name('billing.index');
-    Route::get('/billing/{invoice}', [BillingController::class, 'show'])->name('billing.show');
+    Route::get('/billing/{invoice}', [BillingController::class, 'show'])
+        ->middleware('can:view,invoice')
+        ->name('billing.show');
     Route::get('/billing/{invoice}/pdf', [BillingController::class, 'downloadPdf'])->name('billing.pdf');
     
     Route::middleware('can:manage_billing')->group(function () {
