@@ -20,8 +20,7 @@ class InventoryAdjustmentHttpTest extends TestCase
     {
         [$user, $inventory] = $this->fixture(['adjust_inventory']);
 
-        $this->assertTrue(Gate::forUser($user)->allows('adjust', $inventory));
-        $this->assertTrue($this->adjustmentRequestFor($user, $inventory)->authorize());
+        $this->assertAdjustmentAuthorization($user, $inventory);
 
         $response = $this->actingAs($user)->postJson(
             route('inventory.adjust', $inventory),
@@ -64,6 +63,8 @@ class InventoryAdjustmentHttpTest extends TestCase
     public function test_invalid_adjustment_is_rejected_before_persistence(): void
     {
         [$user, $inventory] = $this->fixture(['adjust_inventory']);
+
+        $this->assertAdjustmentAuthorization($user, $inventory);
 
         $this->actingAs($user)
             ->postJson(route('inventory.adjust', $inventory), [
@@ -110,11 +111,18 @@ class InventoryAdjustmentHttpTest extends TestCase
     {
         $request = CreateInventoryAdjustmentRequest::create('/inventory/'.$inventory->id.'/adjust', 'POST');
         $route = new Route('POST', 'inventory/{inventory}', static fn () => null);
+        $route->bind($request);
         $route->setParameter('inventory', $inventory);
 
         $request->setRouteResolver(static fn () => $route);
         $request->setUserResolver(static fn () => $user);
 
         return $request;
+    }
+
+    private function assertAdjustmentAuthorization(User $user, Inventory $inventory): void
+    {
+        $this->assertTrue(Gate::forUser($user)->allows('adjust', $inventory));
+        $this->assertTrue($this->adjustmentRequestFor($user, $inventory)->authorize());
     }
 }
