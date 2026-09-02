@@ -15,7 +15,10 @@ return new class extends Migration
             $table->unsignedBigInteger('clinic_id');
             $table->timestamps();
 
-            $table->unique(['clinic_membership_id', 'clinic_site_id']);
+            $table->unique(
+                ['clinic_membership_id', 'clinic_site_id'],
+                'clinic_membership_sites_membership_site_unique'
+            );
             $table->index(
                 ['clinic_membership_id', 'clinic_id'],
                 'clinic_membership_sites_membership_clinic_index'
