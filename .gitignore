@@ -7,6 +7,10 @@
 /.env
 /.env.backup
 /.phpunit.result.cache
+/.phpunit.cache/
+/.env.testing
+/coverage/
+/public/build/
 Homestead.json
 Homestead.yaml
 npm-debug.log
@@ -27,4 +31,15 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Clivax generated and local files
+/Clivax_Laravel_v1.1.0/**/storage/
+/Clivax_Laravel_v1.1.0/**/.env
+/Clivax_Laravel_v1.1.0/**/vendor/
+/Clivax_Laravel_v1.1.0/**/node_modules/
+
+# Clinipro generated and local files
+/clinipro/**/node_modules/
+/clinipro/**/dist/
+/clinipro/**/build/
 
