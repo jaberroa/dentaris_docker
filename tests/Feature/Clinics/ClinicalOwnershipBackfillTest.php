@@ -45,8 +45,9 @@ class ClinicalOwnershipBackfillTest extends TestCase
         $this->assertEquals($staffUpdatedAt, Staff::query()->findOrFail($staff->id)->updated_at);
 
         Artisan::call('clinics:backfill-ownership', ['--execute' => true]);
-        $this->assertStringContainsString('"patients_updated":0', Artisan::output());
-        $this->assertStringContainsString('"staff_updated":0', Artisan::output());
+        $secondOutput = Artisan::output();
+        $this->assertStringContainsString('"patients_updated":0', $secondOutput, $secondOutput);
+        $this->assertStringContainsString('"staff_updated":0', $secondOutput, $secondOutput);
     }
 
     private function fixture(): array
