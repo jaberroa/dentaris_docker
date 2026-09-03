@@ -67,27 +67,39 @@ Route::middleware('auth')->group(function () {
         Route::put('/password', [ProfileController::class, 'passwordUpdate'])->name('profile.password.update');
     
     // Gestión de Pacientes
-    Route::get('/patients', [PatientController::class, 'index'])->name('patients.index');
-    Route::get('/patients/search', [PatientController::class, 'search'])->name('patients.search');
-    
-    // Rutas específicas (deben ir antes que las rutas con parámetros)
-    Route::get('/patients/create', [PatientController::class, 'create'])->name('patients.create');
-    Route::post('/patients', [PatientController::class, 'store'])->name('patients.store');
-    
-    // Rutas de exportación
-    Route::get('/patients/export/excel', [PatientController::class, 'exportExcel'])->name('patients.export.excel');
-    Route::get('/patients/export/pdf', [PatientController::class, 'exportPdf'])->name('patients.export.pdf');
-    
-    // Rutas para actualizar género y estado de pacientes
-    Route::patch('/patients/{patient}/gender', [PatientController::class, 'updateGender'])->name('patients.update.gender');
-    Route::patch('/patients/{patient}/status', [PatientController::class, 'updateStatus'])->name('patients.update.status');
-    
-    // Rutas con parámetros (deben ir al final)
-    Route::get('/patients/{patient}', [PatientController::class, 'show'])->name('patients.show');
-    Route::get('/patients/{patient}/edit', [PatientController::class, 'edit'])->name('patients.edit');
-    Route::put('/patients/{patient}', [PatientController::class, 'update'])->name('patients.update');
-    Route::delete('/patients/{patient}', [PatientController::class, 'destroy'])->name('patients.destroy');
-    Route::get('/patients/{patient}/export/history', [PatientController::class, 'exportPatientHistory'])->name('patients.export.history');
+    Route::middleware('clinic.context')->group(function () {
+        Route::middleware('can:viewAny,App\Models\Patient')->group(function () {
+            Route::get('/patients', [PatientController::class, 'index'])->name('patients.index');
+            Route::get('/patients/search', [PatientController::class, 'search'])->name('patients.search');
+        });
+
+        Route::middleware('can:exportAny,App\Models\Patient')->group(function () {
+            Route::get('/patients/export/excel', [PatientController::class, 'exportExcel'])->name('patients.export.excel');
+            Route::get('/patients/export/pdf', [PatientController::class, 'exportPdf'])->name('patients.export.pdf');
+        });
+
+        Route::middleware('can:create,App\Models\Patient')->group(function () {
+            Route::get('/patients/create', [PatientController::class, 'create'])->name('patients.create');
+            Route::post('/patients', [PatientController::class, 'store'])->name('patients.store');
+        });
+
+        Route::middleware('can:update,patient')->group(function () {
+            Route::patch('/patients/{patient}/gender', [PatientController::class, 'updateGender'])->name('patients.update.gender');
+            Route::patch('/patients/{patient}/status', [PatientController::class, 'updateStatus'])->name('patients.update.status');
+            Route::get('/patients/{patient}/edit', [PatientController::class, 'edit'])->name('patients.edit');
+            Route::put('/patients/{patient}', [PatientController::class, 'update'])->name('patients.update');
+        });
+
+        Route::delete('/patients/{patient}', [PatientController::class, 'destroy'])
+            ->middleware('can:delete,patient')
+            ->name('patients.destroy');
+        Route::get('/patients/{patient}/export/history', [PatientController::class, 'exportPatientHistory'])
+            ->middleware('can:export,patient')
+            ->name('patients.export.history');
+        Route::get('/patients/{patient}', [PatientController::class, 'show'])
+            ->middleware('can:view,patient')
+            ->name('patients.show');
+    });
     
     // Gestión de Historias Clínicas
     Route::get('/medical-records', [MedicalRecordController::class, 'index'])->name('medical-records.index');
@@ -198,21 +210,33 @@ Route::middleware('auth')->group(function () {
     Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy'])->name('notifications.destroy');
     
     // Gestión de Personal
-    Route::get('/staff', [StaffController::class, 'index'])->name('staff.index');
-    
-    // Rutas específicas (deben ir antes que las rutas con parámetros)
-    Route::get('/staff/create', [StaffController::class, 'create'])->name('staff.create');
-    Route::post('/staff', [StaffController::class, 'store'])->name('staff.store');
-    
-    // Rutas de exportación
-    Route::get('/staff/export/excel', [StaffController::class, 'exportExcel'])->name('staff.export.excel');
-    Route::get('/staff/export/pdf', [StaffController::class, 'exportPdf'])->name('staff.export.pdf');
-    
-    // Rutas con parámetros (deben ir al final)
-    Route::get('/staff/{staff}', [StaffController::class, 'show'])->name('staff.show');
-    Route::get('/staff/{staff}/edit', [StaffController::class, 'edit'])->name('staff.edit');
-    Route::put('/staff/{staff}', [StaffController::class, 'update'])->name('staff.update');
-    Route::delete('/staff/{staff}', [StaffController::class, 'destroy'])->name('staff.destroy');
+    Route::middleware('clinic.context')->group(function () {
+        Route::middleware('can:viewAny,App\Models\Staff')->group(function () {
+            Route::get('/staff', [StaffController::class, 'index'])->name('staff.index');
+        });
+
+        Route::middleware('can:exportAny,App\Models\Staff')->group(function () {
+            Route::get('/staff/export/excel', [StaffController::class, 'exportExcel'])->name('staff.export.excel');
+            Route::get('/staff/export/pdf', [StaffController::class, 'exportPdf'])->name('staff.export.pdf');
+        });
+
+        Route::middleware('can:create,App\Models\Staff')->group(function () {
+            Route::get('/staff/create', [StaffController::class, 'create'])->name('staff.create');
+            Route::post('/staff', [StaffController::class, 'store'])->name('staff.store');
+        });
+
+        Route::middleware('can:update,staff')->group(function () {
+            Route::get('/staff/{staff}/edit', [StaffController::class, 'edit'])->name('staff.edit');
+            Route::put('/staff/{staff}', [StaffController::class, 'update'])->name('staff.update');
+        });
+
+        Route::delete('/staff/{staff}', [StaffController::class, 'destroy'])
+            ->middleware('can:delete,staff')
+            ->name('staff.destroy');
+        Route::get('/staff/{staff}', [StaffController::class, 'show'])
+            ->middleware('can:view,staff')
+            ->name('staff.show');
+    });
     
     // Gestión de Planes de Tratamiento
     Route::get('/treatment-plans', [TreatmentPlanController::class, 'index'])->name('treatment-plans.index');

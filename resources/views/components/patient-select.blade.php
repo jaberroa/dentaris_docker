@@ -9,10 +9,16 @@
 ])
 
 @php
-    $patients = $patients ?? \App\Models\Patient::select('id', 'first_name', 'last_name', 'patient_code', 'gender')
-        ->where('is_active', true)
-        ->orderBy('last_name')
-        ->get();
+    if ($patients === null) {
+        $clinicContext = request()->attributes->get(\App\Modules\Clinics\Data\ClinicContext::class);
+        $patients = $clinicContext instanceof \App\Modules\Clinics\Data\ClinicContext
+            ? \App\Models\Patient::forClinic($clinicContext)
+                ->select('id', 'first_name', 'last_name', 'patient_code', 'gender')
+                ->where('is_active', true)
+                ->orderBy('last_name')
+                ->get()
+            : collect();
+    }
 @endphp
 
 <div class="mb-3">

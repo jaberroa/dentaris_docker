@@ -3,6 +3,8 @@
 namespace App\Exports;
 
 use App\Models\Patient;
+use App\Modules\Clinics\Data\ClinicContext;
+use LogicException;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
@@ -17,11 +19,14 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 
 class PatientsExport implements FromCollection, WithHeadings, WithMapping, WithStyles, WithColumnWidths, WithEvents
 {
-    protected $filters;
+    protected array $filters;
 
-    public function __construct($filters = [])
+    private ClinicContext $clinicContext;
+
+    public function __construct(array $filters = [], ?ClinicContext $clinicContext = null)
     {
         $this->filters = $filters;
+        $this->clinicContext = $clinicContext ?? $this->contextFromRequest();
     }
 
     /**
@@ -29,7 +34,7 @@ class PatientsExport implements FromCollection, WithHeadings, WithMapping, WithS
     */
     public function collection()
     {
-        $query = Patient::with(['creator']);
+        $query = Patient::forClinic($this->clinicContext)->with(['creator']);
 
         // Aplicar filtros si existen
         if (!empty($this->filters['search'])) {
@@ -197,5 +202,16 @@ class PatientsExport implements FromCollection, WithHeadings, WithMapping, WithS
                 $sheet->getStyle('P:P')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
             }
         ];
+    }
+
+    private function contextFromRequest(): ClinicContext
+    {
+        $context = request()->attributes->get(ClinicContext::class);
+
+        if (!$context instanceof ClinicContext) {
+            throw new LogicException('A validated clinic context is required to export patients.');
+        }
+
+        return $context;
     }
 }

@@ -3,6 +3,8 @@
 namespace App\Exports;
 
 use App\Models\Staff;
+use App\Modules\Clinics\Data\ClinicContext;
+use LogicException;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
@@ -17,11 +19,14 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 
 class StaffExport implements FromCollection, WithHeadings, WithMapping, WithStyles, WithColumnWidths, WithEvents
 {
-    protected $filters;
+    protected array $filters;
 
-    public function __construct($filters = [])
+    private ClinicContext $clinicContext;
+
+    public function __construct(array $filters = [], ?ClinicContext $clinicContext = null)
     {
         $this->filters = $filters;
+        $this->clinicContext = $clinicContext ?? $this->contextFromRequest();
     }
 
     /**
@@ -29,14 +34,18 @@ class StaffExport implements FromCollection, WithHeadings, WithMapping, WithStyl
      */
     public function collection()
     {
-        $query = Staff::with(['user.roles']);
+        $query = Staff::forClinic($this->clinicContext)->with(['user.roles']);
 
         if (!empty($this->filters['search'])) {
             $search = $this->filters['search'];
-            $query->whereHas('user', function($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%");
-            })->orWhere('specialty', 'like', "%{$search}%");
+            $query->where(function ($query) use ($search) {
+                $query->whereHas('user', function ($userQuery) use ($search) {
+                    $userQuery->where(function ($identityQuery) use ($search) {
+                        $identityQuery->where('name', 'like', "%{$search}%")
+                            ->orWhere('email', 'like', "%{$search}%");
+                    });
+                })->orWhere('specialty', 'like', "%{$search}%");
+            });
         }
 
         if (!empty($this->filters['specialty'])) {
@@ -162,6 +171,17 @@ class StaffExport implements FromCollection, WithHeadings, WithMapping, WithStyl
                 $sheet->getStyle('H:H')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
             },
         ];
+    }
+
+    private function contextFromRequest(): ClinicContext
+    {
+        $context = request()->attributes->get(ClinicContext::class);
+
+        if (!$context instanceof ClinicContext) {
+            throw new LogicException('A validated clinic context is required to export staff.');
+        }
+
+        return $context;
     }
 }
 

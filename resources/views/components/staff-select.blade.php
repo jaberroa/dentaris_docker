@@ -9,9 +9,15 @@
 ])
 
 @php
-    $staff = $staff ?? \App\Models\Staff::with('user')
-        ->where('is_active', true)
-        ->get();
+    if ($staff === null) {
+        $clinicContext = request()->attributes->get(\App\Modules\Clinics\Data\ClinicContext::class);
+        $staff = $clinicContext instanceof \App\Modules\Clinics\Data\ClinicContext
+            ? \App\Models\Staff::forClinic($clinicContext)
+                ->with('user')
+                ->where('is_active', true)
+                ->get()
+            : collect();
+    }
 @endphp
 
 <div class="mb-3">
