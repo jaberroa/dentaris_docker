@@ -60,7 +60,11 @@ class PatientApiController extends Controller
             $query->whereDate('created_at', '<=', $request->created_to);
         }
 
-        $perPage = $request->get('per_page', 15);
+        $perPage = $request->integer('per_page', 15);
+
+        if (! in_array($perPage, [10, 15, 25, 50, 100], true)) {
+            $perPage = 15;
+        }
         $patients = $query->paginate($perPage);
 
         return response()->json([
@@ -276,7 +280,7 @@ class PatientApiController extends Controller
             $patient->delete();
 
             return response()->json([
-                'message' => 'Paciente eliminado exitosamente'
+                'message' => 'Paciente eliminado exitosamente.'
             ]);
 
         } catch (\Exception $e) {

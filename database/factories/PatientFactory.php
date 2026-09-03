@@ -33,8 +33,16 @@ class PatientFactory extends Factory
         // Generar fecha de nacimiento entre 18 y 80 años
         $birthDate = $this->faker->dateTimeBetween('-80 years', '-18 years');
         
-        // Generar código único de paciente
-        $patientCode = Patient::generateUniquePatientCode($firstName, $lastName, null);
+        // Los estados de un lote se construyen antes de persistirse. Un número
+        // Faker único evita que dos pacientes con las mismas iniciales reciban
+        // el mismo código durante esa preparación.
+        $initials = Str::upper(Str::substr($firstName, 0, 1).Str::substr($lastName, 0, 1));
+        $patientCode = $initials.str_pad(
+            (string) $this->faker->unique()->numberBetween(1, 99999),
+            5,
+            '0',
+            STR_PAD_LEFT
+        );
         
         return [
             'patient_code' => $patientCode,        
@@ -70,7 +78,7 @@ class PatientFactory extends Factory
             'notes' => $this->faker->optional(0.3)->paragraph(),
             'consent_marketing' => $this->faker->boolean(70),
             'consent_data_processing' => $this->faker->boolean(85),
-            'is_active' => $this->faker->boolean(90),
+            'is_active' => true,
             'created_by' => 1, // Usuario por defecto
         ];
     }

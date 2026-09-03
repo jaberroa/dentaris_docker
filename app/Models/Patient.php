@@ -336,10 +336,23 @@ class Patient extends Model
         $firstLetter = strtoupper(substr($firstName, 0, 1));
         $lastLetter = strtoupper(substr($lastName, 0, 1));
         
-        // Obtener el siguiente número auto-increment para esta combinación de iniciales
-        $nextNumber = self::getNextIncrementNumber($firstLetter . $lastLetter);
-        
-        return $firstLetter . $lastLetter . str_pad($nextNumber, 5, '0', STR_PAD_LEFT);
+        $initials = $firstLetter . $lastLetter;
+        $nextNumber = $patientId !== null && (int) $patientId > 0
+            ? (int) $patientId
+            : self::getNextIncrementNumber($initials);
+
+        do {
+            $code = $initials . str_pad($nextNumber, 5, '0', STR_PAD_LEFT);
+            $query = self::query()->where('patient_code', $code);
+
+            if ($patientId !== null) {
+                $query->where('id', '!=', (int) $patientId);
+            }
+
+            $nextNumber++;
+        } while ($query->exists());
+
+        return $code;
     }
     
     /**
