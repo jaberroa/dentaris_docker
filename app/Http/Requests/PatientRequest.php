@@ -2,6 +2,8 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Patient;
+use App\Modules\Patients\Services\PatientClinicalAccessService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -12,6 +14,14 @@ class PatientRequest extends FormRequest
      */
     public function authorize(): bool
     {
+        $access = app(PatientClinicalAccessService::class);
+        $context = $access->context($this);
+        $patient = $this->route('patient');
+
+        if ($patient instanceof Patient) {
+            $access->patient($patient, $context);
+        }
+
         return true;
     }
 
@@ -64,6 +74,7 @@ class PatientRequest extends FormRequest
             'consent_marketing' => ['boolean'],
             'consent_data_processing' => ['required', 'boolean'],
             'is_active' => ['boolean'],
+            'clinic_id' => ['prohibited'],
         ];
     }
 
@@ -150,8 +161,11 @@ class PatientRequest extends FormRequest
         // Asegurar que los valores booleanos sean correctos
         $mergeData = [
             'consent_marketing' => $this->boolean('consent_marketing'),
-            'consent_data_processing' => $this->boolean('consent_data_processing'),
         ];
+
+        if ($this->has('consent_data_processing')) {
+            $mergeData['consent_data_processing'] = $this->boolean('consent_data_processing');
+        }
         
         // Solo incluir is_active si está presente en el request
         if ($this->has('is_active')) {

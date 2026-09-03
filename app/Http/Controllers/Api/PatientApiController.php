@@ -3,25 +3,31 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\PatientApiRequest;
 use App\Http\Resources\PatientResource;
-use App\Http\Resources\PatientContactResource;
-use App\Http\Resources\PatientDocumentResource;
 use App\Models\Patient;
-use App\Models\PatientContact;
-use App\Models\PatientDocument;
+use App\Modules\Patients\Services\PatientClinicalAccessService;
+use App\Modules\Patients\Services\PatientPersistenceService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 
 class PatientApiController extends Controller
 {
+    public function __construct(
+        private readonly PatientClinicalAccessService $clinicalAccess,
+        private readonly PatientPersistenceService $persistence,
+    ) {
+    }
+
     /**
      * Display a listing of the resource.
      */
     public function index(Request $request): JsonResponse
     {
-        $query = Patient::with(['creator', 'contacts', 'documents'])
+        $context = $this->clinicalAccess->context($request);
+        $query = Patient::query()
+            ->forClinic($context)
+            ->with(['creator', 'contacts', 'documents'])
             ->active()
             ->orderBy('created_at', 'desc');
 
@@ -81,78 +87,15 @@ class PatientApiController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request): JsonResponse
+    public function store(PatientApiRequest $request): JsonResponse
     {
-        $request->validate([
-            'first_name' => 'required|string|max:255',
-            'last_name' => 'required|string|max:255',
-            'email' => 'nullable|email|unique:patients,email',
-            'phone' => 'nullable|string|max:20',
-            'phone_secondary' => 'nullable|string|max:20',
-            'birth_date' => 'required|date|before:today',
-            'gender' => 'required|in:male,female,other',
-            'address' => 'nullable|string|max:500',
-            'city' => 'nullable|string|max:100',
-            'state' => 'nullable|string|max:100',
-            'postal_code' => 'nullable|string|max:20',
-            'country' => 'nullable|string|max:100',
-            'medical_history' => 'nullable|string',
-            'dental_history' => 'nullable|string',
-            'allergies' => 'nullable|string',
-            'medications' => 'nullable|string',
-            'family_history' => 'nullable|string',
-            'social_history' => 'nullable|string',
-            'blood_type' => 'nullable|string|in:A+,A-,B+,B-,AB+,AB-,O+,O-',
-            'occupation' => 'nullable|string|max:255',
-            'marital_status' => 'nullable|string|in:single,married,divorced,widowed',
-            'emergency_contact_name' => 'nullable|string|max:255',
-            'emergency_contact_phone' => 'nullable|string|max:20',
-            'emergency_contact_relationship' => 'nullable|string|max:100',
-            'emergency_contact_address' => 'nullable|string|max:500',
-            'notes' => 'nullable|string',
-            'preferences' => 'nullable|array',
-            'consent_marketing' => 'boolean',
-            'consent_data_processing' => 'required|boolean|accepted',
-            'is_active' => 'boolean',
-        ]);
-
         try {
-            $patientCode = 'PAT-' . strtoupper(Str::random(8));
-
-            $patient = Patient::create([
-                'patient_code' => $patientCode,
-                'first_name' => $request->first_name,
-                'last_name' => $request->last_name,
-                'email' => $request->email,
-                'phone' => $request->phone,
-                'phone_secondary' => $request->phone_secondary,
-                'birth_date' => $request->birth_date,
-                'gender' => $request->gender,
-                'address' => $request->address,
-                'city' => $request->city,
-                'state' => $request->state,
-                'postal_code' => $request->postal_code,
-                'country' => $request->country ?? 'México',
-                'medical_history' => $request->medical_history,
-                'dental_history' => $request->dental_history,
-                'allergies' => $request->allergies,
-                'medications' => $request->medications,
-                'family_history' => $request->family_history,
-                'social_history' => $request->social_history,
-                'blood_type' => $request->blood_type,
-                'occupation' => $request->occupation,
-                'marital_status' => $request->marital_status,
-                'emergency_contact_name' => $request->emergency_contact_name,
-                'emergency_contact_phone' => $request->emergency_contact_phone,
-                'emergency_contact_relationship' => $request->emergency_contact_relationship,
-                'emergency_contact_address' => $request->emergency_contact_address,
-                'notes' => $request->notes,
-                'preferences' => $request->preferences,
-                'consent_marketing' => $request->boolean('consent_marketing'),
-                'consent_data_processing' => $request->boolean('consent_data_processing'),
-                'is_active' => $request->boolean('is_active', true),
-                'created_by' => auth()->id(),
-            ]);
+            $context = $this->clinicalAccess->context($request);
+            $patient = $this->persistence->create(
+                $request->validated(),
+                $context,
+                (int) $request->user()->getAuthIdentifier(),
+            );
 
             return response()->json([
                 'message' => 'Paciente creado exitosamente',
@@ -162,7 +105,6 @@ class PatientApiController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Error al crear el paciente',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -170,8 +112,10 @@ class PatientApiController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(Patient $patient): JsonResponse
+    public function show(Request $request, Patient $patient): JsonResponse
     {
+        $context = $this->clinicalAccess->context($request);
+        $patient = $this->clinicalAccess->patient($patient, $context);
         $patient->load(['creator', 'contacts', 'documents', 'appointments', 'medicalRecords', 'treatmentPlans', 'invoices', 'payments', 'insurances', 'labWorks', 'quotes']);
 
         return response()->json([
@@ -182,74 +126,12 @@ class PatientApiController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, Patient $patient): JsonResponse
+    public function update(PatientApiRequest $request, Patient $patient): JsonResponse
     {
-        $request->validate([
-            'first_name' => 'required|string|max:255',
-            'last_name' => 'required|string|max:255',
-            'email' => 'nullable|email|unique:patients,email,' . $patient->id,
-            'phone' => 'nullable|string|max:20',
-            'phone_secondary' => 'nullable|string|max:20',
-            'birth_date' => 'required|date|before:today',
-            'gender' => 'required|in:male,female,other',
-            'address' => 'nullable|string|max:500',
-            'city' => 'nullable|string|max:100',
-            'state' => 'nullable|string|max:100',
-            'postal_code' => 'nullable|string|max:20',
-            'country' => 'nullable|string|max:100',
-            'medical_history' => 'nullable|string',
-            'dental_history' => 'nullable|string',
-            'allergies' => 'nullable|string',
-            'medications' => 'nullable|string',
-            'family_history' => 'nullable|string',
-            'social_history' => 'nullable|string',
-            'blood_type' => 'nullable|string|in:A+,A-,B+,B-,AB+,AB-,O+,O-',
-            'occupation' => 'nullable|string|max:255',
-            'marital_status' => 'nullable|string|in:single,married,divorced,widowed',
-            'emergency_contact_name' => 'nullable|string|max:255',
-            'emergency_contact_phone' => 'nullable|string|max:20',
-            'emergency_contact_relationship' => 'nullable|string|max:100',
-            'emergency_contact_address' => 'nullable|string|max:500',
-            'notes' => 'nullable|string',
-            'preferences' => 'nullable|array',
-            'consent_marketing' => 'boolean',
-            'consent_data_processing' => 'required|boolean|accepted',
-            'is_active' => 'boolean',
-        ]);
-
         try {
-            $patient->update([
-                'first_name' => $request->first_name,
-                'last_name' => $request->last_name,
-                'email' => $request->email,
-                'phone' => $request->phone,
-                'phone_secondary' => $request->phone_secondary,
-                'birth_date' => $request->birth_date,
-                'gender' => $request->gender,
-                'address' => $request->address,
-                'city' => $request->city,
-                'state' => $request->state,
-                'postal_code' => $request->postal_code,
-                'country' => $request->country,
-                'medical_history' => $request->medical_history,
-                'dental_history' => $request->dental_history,
-                'allergies' => $request->allergies,
-                'medications' => $request->medications,
-                'family_history' => $request->family_history,
-                'social_history' => $request->social_history,
-                'blood_type' => $request->blood_type,
-                'occupation' => $request->occupation,
-                'marital_status' => $request->marital_status,
-                'emergency_contact_name' => $request->emergency_contact_name,
-                'emergency_contact_phone' => $request->emergency_contact_phone,
-                'emergency_contact_relationship' => $request->emergency_contact_relationship,
-                'emergency_contact_address' => $request->emergency_contact_address,
-                'notes' => $request->notes,
-                'preferences' => $request->preferences,
-                'consent_marketing' => $request->boolean('consent_marketing'),
-                'consent_data_processing' => $request->boolean('consent_data_processing'),
-                'is_active' => $request->boolean('is_active', true),
-            ]);
+            $context = $this->clinicalAccess->context($request);
+            $patient = $this->clinicalAccess->patient($patient, $context);
+            $patient = $this->persistence->update($patient, $request->validated());
 
             return response()->json([
                 'message' => 'Paciente actualizado exitosamente',
@@ -259,7 +141,6 @@ class PatientApiController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Error al actualizar el paciente',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -267,8 +148,11 @@ class PatientApiController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Patient $patient): JsonResponse
+    public function destroy(Request $request, Patient $patient): JsonResponse
     {
+        $context = $this->clinicalAccess->context($request);
+        $patient = $this->clinicalAccess->patient($patient, $context);
+
         try {
             // Verificar si tiene registros relacionados
             if ($patient->appointments()->exists()) {
@@ -286,7 +170,6 @@ class PatientApiController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Error al eliminar el paciente',
-                'error' => $e->getMessage()
             ], 500);
         }
     }
@@ -296,9 +179,12 @@ class PatientApiController extends Controller
      */
     public function search(Request $request): JsonResponse
     {
+        $context = $this->clinicalAccess->context($request);
         $query = $request->get('q', '');
         
-        $patients = Patient::active()
+        $patients = Patient::query()
+            ->forClinic($context)
+            ->active()
             ->search($query)
             ->limit(10)
             ->get(['id', 'patient_code', 'first_name', 'last_name', 'phone']);
@@ -311,8 +197,10 @@ class PatientApiController extends Controller
     /**
      * Get patient appointments
      */
-    public function appointments(Patient $patient): JsonResponse
+    public function appointments(Request $request, Patient $patient): JsonResponse
     {
+        $context = $this->clinicalAccess->context($request);
+        $patient = $this->clinicalAccess->patient($patient, $context);
         $appointments = $patient->appointments()
             ->with(['staff.user', 'status'])
             ->orderBy('appointment_date', 'desc')
@@ -332,8 +220,10 @@ class PatientApiController extends Controller
     /**
      * Get patient treatment plans
      */
-    public function treatmentPlans(Patient $patient): JsonResponse
+    public function treatmentPlans(Request $request, Patient $patient): JsonResponse
     {
+        $context = $this->clinicalAccess->context($request);
+        $patient = $this->clinicalAccess->patient($patient, $context);
         $treatmentPlans = $patient->treatmentPlans()
             ->with(['staff.user'])
             ->orderBy('created_at', 'desc')
@@ -353,8 +243,10 @@ class PatientApiController extends Controller
     /**
      * Get patient invoices
      */
-    public function invoices(Patient $patient): JsonResponse
+    public function invoices(Request $request, Patient $patient): JsonResponse
     {
+        $context = $this->clinicalAccess->context($request);
+        $patient = $this->clinicalAccess->patient($patient, $context);
         $invoices = $patient->invoices()
             ->with(['staff.user', 'creator'])
             ->orderBy('invoice_date', 'desc')
@@ -374,8 +266,11 @@ class PatientApiController extends Controller
     /**
      * Get patient statistics
      */
-    public function statistics(Patient $patient): JsonResponse
+    public function statistics(Request $request, Patient $patient): JsonResponse
     {
+        $context = $this->clinicalAccess->context($request);
+        $patient = $this->clinicalAccess->patient($patient, $context);
+
         return response()->json([
             'data' => $patient->stats
         ]);

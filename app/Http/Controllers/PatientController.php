@@ -3,21 +3,20 @@
 namespace App\Http\Controllers;
 
 use App\Models\Patient;
-use App\Models\PatientContact;
-use App\Models\PatientDocument;
 use App\Http\Requests\PatientRequest;
+use App\Modules\Patients\Services\PatientClinicalAccessService;
+use App\Modules\Patients\Services\PatientPersistenceService;
 use Illuminate\Http\Request;
 use App\Exports\PatientsExport;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use Maatwebsite\Excel\Facades\Excel;
 use Barryvdh\DomPDF\Facade\Pdf;
 
 class PatientController extends Controller
 {
-    public function __construct()
-    {
-        // Middleware se aplica en las rutas, no en el constructor
+    public function __construct(
+        private readonly PatientClinicalAccessService $clinicalAccess,
+        private readonly PatientPersistenceService $persistence,
+    ) {
     }
 
     /**
@@ -25,7 +24,10 @@ class PatientController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Patient::with(['creator', 'contacts']);
+        $context = $this->clinicalAccess->context($request);
+        $query = Patient::query()
+            ->forClinic($context)
+            ->with(['creator', 'contacts']);
 
         // Sorting
         $sortField = $request->get('sort', 'created_at');
@@ -143,8 +145,10 @@ class PatientController extends Controller
     /**
      * Show the form for creating a new resource.
      */
-    public function create()
+    public function create(Request $request)
     {
+        $this->clinicalAccess->context($request);
+
         return view('patients.create');
     }
 
@@ -154,51 +158,12 @@ class PatientController extends Controller
     public function store(PatientRequest $request)
     {
         try {
-            // Crear el paciente primero sin código para obtener el ID
-            $patient = Patient::create([
-                'patient_code' => 'TEMP', // Código temporal
-                'first_name' => $request->first_name,
-                'last_name' => $request->last_name,
-                'email' => $request->email,
-                'phone' => $request->phone,
-                'phone_secondary' => $request->phone_secondary,
-                'birth_date' => $request->birth_date,
-                'gender' => $request->gender,
-                'address' => $request->address,
-                'city' => $request->city,
-                'state' => $request->state,
-                'postal_code' => $request->postal_code,
-                'country' => $request->country ?? 'México',
-                'medical_history' => $request->medical_history,
-                'dental_history' => $request->dental_history,
-                'allergies' => $request->allergies,
-                'medications' => $request->medications,
-                'family_history' => $request->family_history,
-                'social_history' => $request->social_history,
-                'blood_type' => $request->blood_type,
-                'occupation' => $request->occupation,
-                'marital_status' => $request->marital_status,
-                'emergency_contact_name' => $request->emergency_contact_name,
-                'emergency_contact_phone' => $request->emergency_contact_phone,
-                'emergency_contact_relationship' => $request->emergency_contact_relationship,
-                'emergency_contact_address' => $request->emergency_contact_address,
-                'notes' => $request->notes,
-                'preferences' => $request->preferences,
-                'consent_marketing' => $request->consent_marketing ?? false,
-                'consent_data_processing' => $request->consent_data_processing ?? true,
-                'is_active' => $request->is_active ?? true,
-                'created_by' => auth()->id(),
-            ]);
-
-            // Generar código único basado en el ID del paciente creado
-            $uniqueCode = Patient::generateUniquePatientCode(
-                $request->first_name, 
-                $request->last_name, 
-                $patient->id
+            $context = $this->clinicalAccess->context($request);
+            $patient = $this->persistence->create(
+                $request->validated(),
+                $context,
+                (int) $request->user()->getAuthIdentifier(),
             );
-            
-            // Actualizar el paciente con el código único
-            $patient->update(['patient_code' => $uniqueCode]);
 
             // Log de creación
             activity()
@@ -219,8 +184,11 @@ class PatientController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(Patient $patient)
+    public function show(Request $request, Patient $patient)
     {
+        $context = $this->clinicalAccess->context($request);
+        $patient = $this->clinicalAccess->patient($patient, $context);
+
         $patient->load([
             'creator',
             'contacts',
@@ -238,8 +206,10 @@ class PatientController extends Controller
     /**
      * Show the form for editing the specified resource.
      */
-    public function edit(Patient $patient)
+    public function edit(Request $request, Patient $patient)
     {
+        $context = $this->clinicalAccess->context($request);
+        $patient = $this->clinicalAccess->patient($patient, $context);
         $patient->load('contacts');
         return view('patients.edit', compact('patient'));
     }
@@ -250,38 +220,9 @@ class PatientController extends Controller
     public function update(PatientRequest $request, Patient $patient)
     {
         try {
-            $patient->update([
-                'first_name' => $request->first_name,
-                'last_name' => $request->last_name,
-                'email' => $request->email,
-                'phone' => $request->phone,
-                'phone_secondary' => $request->phone_secondary,
-                'birth_date' => $request->birth_date,
-                'gender' => $request->gender,
-                'address' => $request->address,
-                'city' => $request->city,
-                'state' => $request->state,
-                'postal_code' => $request->postal_code,
-                'country' => $request->country ?? 'México',
-                'medical_history' => $request->medical_history,
-                'dental_history' => $request->dental_history,
-                'allergies' => $request->allergies,
-                'medications' => $request->medications,
-                'family_history' => $request->family_history,
-                'social_history' => $request->social_history,
-                'blood_type' => $request->blood_type,
-                'occupation' => $request->occupation,
-                'marital_status' => $request->marital_status,
-                'emergency_contact_name' => $request->emergency_contact_name,
-                'emergency_contact_phone' => $request->emergency_contact_phone,
-                'emergency_contact_relationship' => $request->emergency_contact_relationship,
-                'emergency_contact_address' => $request->emergency_contact_address,
-                'notes' => $request->notes,
-                'preferences' => $request->preferences,
-                'consent_marketing' => $request->consent_marketing ?? false,
-                'consent_data_processing' => $request->consent_data_processing ?? true,
-                'is_active' => $request->is_active ?? true,
-            ]);
+            $context = $this->clinicalAccess->context($request);
+            $patient = $this->clinicalAccess->patient($patient, $context);
+            $patient = $this->persistence->update($patient, $request->validated());
 
             // Log de actualización
             activity()
@@ -302,8 +243,11 @@ class PatientController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Patient $patient)
+    public function destroy(Request $request, Patient $patient)
     {
+        $context = $this->clinicalAccess->context($request);
+        $patient = $this->clinicalAccess->patient($patient, $context);
+
         try {
             // Verificar si tiene registros relacionados
             if ($patient->appointments()->exists()) {
@@ -335,11 +279,14 @@ class PatientController extends Controller
      */
     public function search(Request $request)
     {
+        $context = $this->clinicalAccess->context($request);
         $search = $request->get('search', '');
         $page = $request->get('page', 1);
         $perPage = 15;
         
-        $query = Patient::active()
+        $query = Patient::query()
+            ->forClinic($context)
+            ->active()
             ->where(function($q) use ($search) {
                 $q->where('first_name', 'like', "%{$search}%")
                   ->orWhere('last_name', 'like', "%{$search}%")
@@ -372,11 +319,12 @@ class PatientController extends Controller
      */
     public function exportExcel(Request $request)
     {
+        $context = $this->clinicalAccess->context($request);
         $filters = $request->only(['search', 'gender', 'is_active', 'date_from', 'date_to']);
         
         $filename = 'pacientes_' . now()->format('Y-m-d_H-i-s') . '.xlsx';
         
-        return Excel::download(new PatientsExport($filters), $filename);
+        return Excel::download(new PatientsExport($filters, $context), $filename);
     }
 
     /**
@@ -384,10 +332,13 @@ class PatientController extends Controller
      */
     public function exportPdf(Request $request)
     {
+        $context = $this->clinicalAccess->context($request);
         $filters = $request->only(['search', 'gender', 'is_active', 'date_from', 'date_to']);
         
         // Obtener pacientes con filtros aplicados
-        $query = Patient::with(['creator']);
+        $query = Patient::query()
+            ->forClinic($context)
+            ->with(['creator']);
 
         if (!empty($filters['search'])) {
             $search = $filters['search'];
@@ -434,8 +385,10 @@ class PatientController extends Controller
     /**
      * Exportar historial médico de un paciente específico a PDF
      */
-    public function exportPatientHistory(Patient $patient)
+    public function exportPatientHistory(Request $request, Patient $patient)
     {
+        $context = $this->clinicalAccess->context($request);
+        $patient = $this->clinicalAccess->patient($patient, $context);
         $patient->load(['medicalRecords.staff.user', 'appointments.staff.user', 'treatmentPlans']);
         
         $filename = 'historial_' . $patient->patient_code . '_' . now()->format('Y-m-d') . '.pdf';
@@ -456,6 +409,9 @@ class PatientController extends Controller
      */
     public function updateGender(Request $request, Patient $patient)
     {
+        $context = $this->clinicalAccess->context($request);
+        $patient = $this->clinicalAccess->patient($patient, $context);
+
         $request->validate([
             'gender' => 'required|in:male,female,other'
         ]);
@@ -495,6 +451,9 @@ class PatientController extends Controller
      */
     public function updateStatus(Request $request, Patient $patient)
     {
+        $context = $this->clinicalAccess->context($request);
+        $patient = $this->clinicalAccess->patient($patient, $context);
+
         try {
             // Validar que is_active sea boolean o string que represente boolean
             $isActive = $request->is_active;
