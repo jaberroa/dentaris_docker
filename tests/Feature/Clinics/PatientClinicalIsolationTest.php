@@ -202,12 +202,28 @@ class PatientClinicalIsolationTest extends TestCase
         $otherClinicId = $this->clinic('CL-B');
         $now = now();
 
-        DB::table('clinic_memberships')->insert([
+        $membershipId = DB::table('clinic_memberships')->insertGetId([
             'clinic_id' => $clinicId,
             'user_id' => $user->id,
             'status' => 'active',
             'activated_at' => $now,
             'suspended_at' => null,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+
+        $roleId = DB::table('roles')->insertGetId([
+            'name' => 'patient-clinical-test-'.uniqid(),
+            'display_name' => 'Acceso clínico de pacientes',
+            'permissions' => json_encode(['view_patients', 'manage_patients']),
+            'is_active' => true,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+
+        DB::table('clinic_membership_roles')->insert([
+            'clinic_membership_id' => $membershipId,
+            'role_id' => $roleId,
             'created_at' => $now,
             'updated_at' => $now,
         ]);

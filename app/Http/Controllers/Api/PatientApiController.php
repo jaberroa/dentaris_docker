@@ -10,6 +10,7 @@ use App\Modules\Patients\Services\PatientClinicalAccessService;
 use App\Modules\Patients\Services\PatientPersistenceService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Gate;
 
 class PatientApiController extends Controller
 {
@@ -25,6 +26,7 @@ class PatientApiController extends Controller
     public function index(Request $request): JsonResponse
     {
         $context = $this->clinicalAccess->context($request);
+        Gate::authorize('viewAny', Patient::class);
         $query = Patient::query()
             ->forClinic($context)
             ->with(['creator', 'contacts', 'documents'])
@@ -91,6 +93,7 @@ class PatientApiController extends Controller
     {
         try {
             $context = $this->clinicalAccess->context($request);
+            Gate::authorize('create', Patient::class);
             $patient = $this->persistence->create(
                 $request->validated(),
                 $context,
@@ -116,6 +119,7 @@ class PatientApiController extends Controller
     {
         $context = $this->clinicalAccess->context($request);
         $patient = $this->clinicalAccess->patient($patient, $context);
+        Gate::authorize('view', $patient);
         $patient->load(['creator', 'contacts', 'documents', 'appointments', 'medicalRecords', 'treatmentPlans', 'invoices', 'payments', 'insurances', 'labWorks', 'quotes']);
 
         return response()->json([
@@ -131,6 +135,7 @@ class PatientApiController extends Controller
         try {
             $context = $this->clinicalAccess->context($request);
             $patient = $this->clinicalAccess->patient($patient, $context);
+            Gate::authorize('update', $patient);
             $patient = $this->persistence->update($patient, $request->validated());
 
             return response()->json([
@@ -152,6 +157,7 @@ class PatientApiController extends Controller
     {
         $context = $this->clinicalAccess->context($request);
         $patient = $this->clinicalAccess->patient($patient, $context);
+        Gate::authorize('delete', $patient);
 
         try {
             // Verificar si tiene registros relacionados
@@ -180,6 +186,7 @@ class PatientApiController extends Controller
     public function search(Request $request): JsonResponse
     {
         $context = $this->clinicalAccess->context($request);
+        Gate::authorize('viewAny', Patient::class);
         $query = $request->get('q', '');
         
         $patients = Patient::query()
@@ -201,6 +208,7 @@ class PatientApiController extends Controller
     {
         $context = $this->clinicalAccess->context($request);
         $patient = $this->clinicalAccess->patient($patient, $context);
+        Gate::authorize('view', $patient);
         $appointments = $patient->appointments()
             ->with(['staff.user', 'status'])
             ->orderBy('appointment_date', 'desc')
@@ -224,6 +232,7 @@ class PatientApiController extends Controller
     {
         $context = $this->clinicalAccess->context($request);
         $patient = $this->clinicalAccess->patient($patient, $context);
+        Gate::authorize('view', $patient);
         $treatmentPlans = $patient->treatmentPlans()
             ->with(['staff.user'])
             ->orderBy('created_at', 'desc')
@@ -247,6 +256,7 @@ class PatientApiController extends Controller
     {
         $context = $this->clinicalAccess->context($request);
         $patient = $this->clinicalAccess->patient($patient, $context);
+        Gate::authorize('view', $patient);
         $invoices = $patient->invoices()
             ->with(['staff.user', 'creator'])
             ->orderBy('invoice_date', 'desc')
@@ -270,6 +280,7 @@ class PatientApiController extends Controller
     {
         $context = $this->clinicalAccess->context($request);
         $patient = $this->clinicalAccess->patient($patient, $context);
+        Gate::authorize('view', $patient);
 
         return response()->json([
             'data' => $patient->stats

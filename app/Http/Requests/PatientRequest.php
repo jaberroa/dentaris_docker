@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use App\Models\Patient;
 use App\Modules\Patients\Services\PatientClinicalAccessService;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 
 class PatientRequest extends FormRequest
@@ -19,7 +20,10 @@ class PatientRequest extends FormRequest
         $patient = $this->route('patient');
 
         if ($patient instanceof Patient) {
-            $access->patient($patient, $context);
+            $patient = $access->patient($patient, $context);
+            Gate::authorize('update', $patient);
+        } else {
+            Gate::authorize('create', Patient::class);
         }
 
         return true;

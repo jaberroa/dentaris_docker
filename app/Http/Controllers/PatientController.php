@@ -8,6 +8,7 @@ use App\Modules\Patients\Services\PatientClinicalAccessService;
 use App\Modules\Patients\Services\PatientPersistenceService;
 use Illuminate\Http\Request;
 use App\Exports\PatientsExport;
+use Illuminate\Support\Facades\Gate;
 use Maatwebsite\Excel\Facades\Excel;
 use Barryvdh\DomPDF\Facade\Pdf;
 
@@ -25,6 +26,7 @@ class PatientController extends Controller
     public function index(Request $request)
     {
         $context = $this->clinicalAccess->context($request);
+        Gate::authorize('viewAny', Patient::class);
         $query = Patient::query()
             ->forClinic($context)
             ->with(['creator', 'contacts']);
@@ -148,6 +150,7 @@ class PatientController extends Controller
     public function create(Request $request)
     {
         $this->clinicalAccess->context($request);
+        Gate::authorize('create', Patient::class);
 
         return view('patients.create');
     }
@@ -159,6 +162,7 @@ class PatientController extends Controller
     {
         try {
             $context = $this->clinicalAccess->context($request);
+            Gate::authorize('create', Patient::class);
             $patient = $this->persistence->create(
                 $request->validated(),
                 $context,
@@ -188,6 +192,7 @@ class PatientController extends Controller
     {
         $context = $this->clinicalAccess->context($request);
         $patient = $this->clinicalAccess->patient($patient, $context);
+        Gate::authorize('view', $patient);
 
         $patient->load([
             'creator',
@@ -210,6 +215,7 @@ class PatientController extends Controller
     {
         $context = $this->clinicalAccess->context($request);
         $patient = $this->clinicalAccess->patient($patient, $context);
+        Gate::authorize('update', $patient);
         $patient->load('contacts');
         return view('patients.edit', compact('patient'));
     }
@@ -222,6 +228,7 @@ class PatientController extends Controller
         try {
             $context = $this->clinicalAccess->context($request);
             $patient = $this->clinicalAccess->patient($patient, $context);
+            Gate::authorize('update', $patient);
             $patient = $this->persistence->update($patient, $request->validated());
 
             // Log de actualización
@@ -247,6 +254,7 @@ class PatientController extends Controller
     {
         $context = $this->clinicalAccess->context($request);
         $patient = $this->clinicalAccess->patient($patient, $context);
+        Gate::authorize('delete', $patient);
 
         try {
             // Verificar si tiene registros relacionados
@@ -280,6 +288,7 @@ class PatientController extends Controller
     public function search(Request $request)
     {
         $context = $this->clinicalAccess->context($request);
+        Gate::authorize('viewAny', Patient::class);
         $search = $request->get('search', '');
         $page = $request->get('page', 1);
         $perPage = 15;
@@ -320,6 +329,7 @@ class PatientController extends Controller
     public function exportExcel(Request $request)
     {
         $context = $this->clinicalAccess->context($request);
+        Gate::authorize('exportAny', Patient::class);
         $filters = $request->only(['search', 'gender', 'is_active', 'date_from', 'date_to']);
         
         $filename = 'pacientes_' . now()->format('Y-m-d_H-i-s') . '.xlsx';
@@ -333,6 +343,7 @@ class PatientController extends Controller
     public function exportPdf(Request $request)
     {
         $context = $this->clinicalAccess->context($request);
+        Gate::authorize('exportAny', Patient::class);
         $filters = $request->only(['search', 'gender', 'is_active', 'date_from', 'date_to']);
         
         // Obtener pacientes con filtros aplicados
@@ -389,6 +400,7 @@ class PatientController extends Controller
     {
         $context = $this->clinicalAccess->context($request);
         $patient = $this->clinicalAccess->patient($patient, $context);
+        Gate::authorize('export', $patient);
         $patient->load(['medicalRecords.staff.user', 'appointments.staff.user', 'treatmentPlans']);
         
         $filename = 'historial_' . $patient->patient_code . '_' . now()->format('Y-m-d') . '.pdf';
@@ -411,6 +423,7 @@ class PatientController extends Controller
     {
         $context = $this->clinicalAccess->context($request);
         $patient = $this->clinicalAccess->patient($patient, $context);
+        Gate::authorize('update', $patient);
 
         $request->validate([
             'gender' => 'required|in:male,female,other'
@@ -453,6 +466,7 @@ class PatientController extends Controller
     {
         $context = $this->clinicalAccess->context($request);
         $patient = $this->clinicalAccess->patient($patient, $context);
+        Gate::authorize('update', $patient);
 
         try {
             // Validar que is_active sea boolean o string que represente boolean
