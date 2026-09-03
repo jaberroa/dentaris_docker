@@ -107,8 +107,10 @@ final class ClinicalOwnershipBackfillService
             'eligible' => $staffEligible,
             'duplicate_pending_users' => DB::table('staff')
                 ->whereNull('clinic_id')
+                ->select('user_id')
                 ->groupBy('user_id')
                 ->havingRaw('COUNT(*) > 1')
+                ->get()
                 ->count(),
             'target_collisions' => DB::table('staff as pending')
                 ->join('staff as assigned', function ($join) use ($clinicId) {
