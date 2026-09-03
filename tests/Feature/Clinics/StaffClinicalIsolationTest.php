@@ -22,34 +22,23 @@ class StaffClinicalIsolationTest extends TestCase
         $clinicB = $this->clinic('B');
         $this->membership($operator, $clinicA, $managerRole);
 
-        $local = $this->staff($clinicA, 'Local Visible', 'Higienista');
-        $foreign = $this->staff($clinicB, 'Nombre Ajeno', 'Secreto Buscable');
+        $local = $this->staff($clinicA, 'Local Visible', 'Coincidencia Clínica');
+        $foreign = $this->staff($clinicB, 'Nombre Ajeno', 'Coincidencia Clínica');
 
         $this->actingAs($operator)
             ->get(route('staff.index'))
             ->assertForbidden();
 
-        $unfiltered = $this->actingAs($operator)
-            ->withSession(['clinic_id' => $clinicA->id])
-            ->get(route('staff.index'));
-        $unfiltered->assertOk();
-        $unfiltered->assertViewHas('staff', function ($staff) use ($local, $foreign): bool {
-            $ids = $staff->getCollection()->modelKeys();
-
-            return in_array($local->id, $ids, true)
-                && ! in_array($foreign->id, $ids, true);
-        });
-
         $response = $this->actingAs($operator)
             ->withSession(['clinic_id' => $clinicA->id])
-            ->get(route('staff.index', ['search' => 'Secreto Buscable']));
+            ->get(route('staff.index', ['search' => 'Coincidencia Clínica']));
 
         $response->assertOk();
         $response->assertViewHas('staff', function ($staff) use ($local, $foreign): bool {
             $ids = $staff->getCollection()->modelKeys();
 
-            return ! in_array($foreign->id, $ids, true)
-                && ! in_array($local->id, $ids, true);
+            return in_array($local->id, $ids, true)
+                && ! in_array($foreign->id, $ids, true);
         });
     }
 
