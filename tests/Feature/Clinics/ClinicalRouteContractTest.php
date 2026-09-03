@@ -16,6 +16,7 @@ use Illuminate\Routing\Route as RoutingRoute;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\ViewErrorBag;
 use LogicException;
 use Tests\TestCase;
 
@@ -151,6 +152,7 @@ class ClinicalRouteContractTest extends TestCase
         $localStaff = $this->createStaff(User::factory()->create(), $clinicId, 'General');
         $foreignStaff = $this->createStaff(User::factory()->create(), $otherClinicId, 'General');
         request()->attributes->set(ClinicContext::class, $context);
+        view()->share('errors', new ViewErrorBag());
 
         $patientHtml = Blade::render('<x-patient-select />');
         $staffHtml = Blade::render('<x-staff-select />');
