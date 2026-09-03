@@ -11,6 +11,10 @@ use Throwable;
 
 class ResolveClinicContext
 {
+    private const CLINIC_SESSION_KEY = 'clinic_id';
+
+    private const CLINIC_SITE_SESSION_KEY = 'clinic_site_id';
+
     public function __construct(
         private readonly ClinicContextResolver $resolver,
     ) {
@@ -33,8 +37,8 @@ class ResolveClinicContext
         try {
             $context = $this->resolver->resolve(
                 userId: $user->getAuthIdentifier(),
-                clinicId: $request->header('X-Clinic-Id'),
-                clinicSiteId: $request->header('X-Clinic-Site-Id'),
+                clinicId: $this->candidate($request, 'X-Clinic-Id', self::CLINIC_SESSION_KEY),
+                clinicSiteId: $this->candidate($request, 'X-Clinic-Site-Id', self::CLINIC_SITE_SESSION_KEY),
             );
         } catch (Throwable) {
             // No exponer detalles de infraestructura ni de pertenencia clínica.
@@ -49,6 +53,24 @@ class ResolveClinicContext
         $request->attributes->set('clinic.context', $context);
 
         return $next($request);
+    }
+
+    /**
+     * Las cabeceras conservan prioridad para API y clientes existentes. En
+     * solicitudes web, la sesión permite transportar un contexto previamente
+     * seleccionado sin convertir ese valor en una concesión de acceso.
+     */
+    private function candidate(Request $request, string $header, string $sessionKey): mixed
+    {
+        if ($request->headers->has($header)) {
+            return $request->header($header);
+        }
+
+        if ($request->hasSession()) {
+            return $request->session()->get($sessionKey);
+        }
+
+        return null;
     }
 
     private function reject(Request $request, int $status, string $code): Response

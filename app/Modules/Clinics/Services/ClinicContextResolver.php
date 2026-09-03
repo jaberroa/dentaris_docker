@@ -28,10 +28,14 @@ class ClinicContextResolver
 
         $membership = $this->connection->table('clinic_memberships as membership')
             ->join('clinics as clinic', 'clinic.id', '=', 'membership.clinic_id')
+            ->join('users as user', 'user.id', '=', 'membership.user_id')
             ->where('membership.user_id', $userId)
             ->where('membership.clinic_id', $clinicId)
             ->where('membership.status', 'active')
+            ->whereNotNull('membership.activated_at')
+            ->whereNull('membership.suspended_at')
             ->where('clinic.is_active', true)
+            ->where('user.is_active', true)
             ->first([
                 'membership.id as membership_id',
                 'membership.clinic_id',
@@ -64,6 +68,7 @@ class ClinicContextResolver
         $schema = $this->connection->getSchemaBuilder();
 
         return $schema->hasTable('clinics')
+            && $schema->hasTable('users')
             && $schema->hasTable('clinic_memberships')
             && $schema->hasTable('clinic_sites')
             && $schema->hasTable('clinic_membership_sites');
@@ -82,6 +87,8 @@ class ClinicContextResolver
             ->where('site.clinic_id', $clinicId)
             ->where('site.is_active', true)
             ->where('membership.status', 'active')
+            ->whereNotNull('membership.activated_at')
+            ->whereNull('membership.suspended_at')
             ->exists();
     }
 
