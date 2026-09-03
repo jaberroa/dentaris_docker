@@ -2,40 +2,37 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Staff;
-use App\Models\User;
-use App\Models\Role;
 use App\Exports\StaffExport;
+use App\Http\Requests\Staff\StoreStaffRequest;
+use App\Http\Requests\Staff\UpdateStaffRequest;
+use App\Models\Role;
+use App\Models\Staff;
+use App\Modules\Clinics\Data\ClinicContext;
+use App\Modules\Clinics\Services\StaffClinicalService;
+use DomainException;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Facades\Excel;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Throwable;
 
 class StaffController extends Controller
 {
+    public function __construct(
+        private readonly StaffClinicalService $staffService,
+    ) {
+    }
+
     /**
      * Display a listing of the resource.
      */
     public function index(Request $request)
     {
-        $query = Staff::with(['user.roles']);
-
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $query->whereHas('user', function($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%");
-            })->orWhere('specialty', 'like', "%{$search}%");
-        }
-
-        if ($request->filled('specialty')) {
-            $query->where('specialty', $request->specialty);
-        }
-
-        if ($request->filled('is_active')) {
-            $query->where('is_active', $request->is_active);
-        }
+        $context = $this->clinicContext($request);
+        Gate::authorize('viewAny', Staff::class);
+        $query = $this->filteredQuery($request, $context);
 
         // Manejar per_page
         $perPage = $request->get('per_page', 10);
@@ -50,16 +47,20 @@ class StaffController extends Controller
             $staff = new \Illuminate\Pagination\LengthAwarePaginator(
                 $staff,
                 $total,
-                $total, // perPage = total para mostrar todos
+                max($total, 1),
                 $currentPage,
                 ['path' => request()->url(), 'pageName' => 'page']
             );
             $staff->appends($request->query());
         } else {
             $perPage = (int) $perPage;
-            if ($perPage < 1) $perPage = 10;
+            if (! in_array($perPage, [10, 25, 50, 100], true)) {
+                $perPage = 10;
+            }
             $staff = $query->orderBy('created_at', 'desc')->paginate($perPage)->withQueryString();
         }
+
+        $this->staffService->loadClinicRoles($staff->getCollection(), $context);
 
         $perPageValue = $request->get('per_page', 10);
         
@@ -69,54 +70,34 @@ class StaffController extends Controller
     /**
      * Show the form for creating a new resource.
      */
-    public function create()
+    public function create(Request $request)
     {
-        $roles = Role::where('is_active', true)->get();
+        $this->clinicContext($request);
+        Gate::authorize('create', Staff::class);
+        $roles = Role::query()->where('is_active', true)->orderBy('display_name')->get();
+
         return view('staff.create', compact('roles'));
     }
 
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
+    public function store(StoreStaffRequest $request)
     {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
-            'password' => 'required|string|min:8|confirmed',
-            'phone' => 'nullable|string|max:20',
-            'specialty' => 'nullable|string|max:255',
-            'license_number' => 'nullable|string|max:100',
-            'hire_date' => 'nullable|date',
-            'salary' => 'nullable|numeric|min:0',
-            'role_id' => 'required|exists:roles,id',
-            'is_active' => 'boolean'
-        ]);
+        $context = $request->clinicContext();
+        Gate::authorize('create', Staff::class);
 
-        DB::transaction(function () use ($request) {
-            // Crear usuario
-            $user = User::create([
-                'name' => $request->name,
-                'email' => $request->email,
-                'password' => Hash::make($request->password),
-                'email_verified_at' => now(),
-            ]);
-
-            // Asignar rol
-            $role = Role::find($request->role_id);
-            $user->assignRole($role);
-
-            // Crear staff
-            Staff::create([
-                'user_id' => $user->id,
-                'phone' => $request->phone,
-                'specialty' => $request->specialty,
-                'license_number' => $request->license_number,
-                'hire_date' => $request->hire_date,
-                'salary' => $request->salary,
-                'is_active' => $request->has('is_active'),
-            ]);
-        });
+        try {
+            $this->staffService->create(
+                $request->userData(),
+                $request->staffData(),
+                $request->roleId(),
+                $context,
+                $this->auditContext($request),
+            );
+        } catch (DomainException $exception) {
+            return back()->withErrors(['staff' => $exception->getMessage()])->withInput();
+        }
 
         return redirect()->route('staff.index')->with('success', 'Personal creado exitosamente.');
     }
@@ -124,74 +105,53 @@ class StaffController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(Staff $staff)
+    public function show(Request $request, Staff $staff)
     {
-        $staff->load(['user.roles']);
+        $context = $this->clinicContext($request);
+        $staff = $this->staffForContext($staff, $context);
+        Gate::authorize('view', $staff);
+        $staff->load('user');
+        $this->staffService->loadClinicRoles(new \Illuminate\Database\Eloquent\Collection([$staff]), $context);
+
         return view('staff.show', compact('staff'));
     }
 
     /**
      * Show the form for editing the specified resource.
      */
-    public function edit(Staff $staff)
+    public function edit(Request $request, Staff $staff)
     {
-        $staff->load(['user.roles']);
-        $roles = Role::where('is_active', true)->get();
+        $context = $this->clinicContext($request);
+        $staff = $this->staffForContext($staff, $context);
+        Gate::authorize('update', $staff);
+        $staff->load('user');
+        $this->staffService->loadClinicRoles(new \Illuminate\Database\Eloquent\Collection([$staff]), $context);
+        $roles = Role::query()->where('is_active', true)->orderBy('display_name')->get();
+
         return view('staff.edit', compact('staff', 'roles'));
     }
 
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, Staff $staff)
+    public function update(UpdateStaffRequest $request, Staff $staff)
     {
-        $validationRules = [
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users,email,' . $staff->user_id,
-            'phone' => 'nullable|string|max:20',
-            'specialty' => 'nullable|string|max:255',
-            'license_number' => 'nullable|string|max:100',
-            'hire_date' => 'nullable|date',
-            'salary' => 'nullable|numeric|min:0',
-            'role_id' => 'required|exists:roles,id',
-            'is_active' => 'nullable|boolean'
-        ];
+        $context = $request->clinicContext();
+        $staff = $this->staffForContext($staff, $context);
+        Gate::authorize('update', $staff);
 
-        // Solo validar contraseña si se proporciona
-        if ($request->filled('password')) {
-            $validationRules['password'] = 'required|string|min:8|confirmed';
+        try {
+            $this->staffService->update(
+                $staff,
+                $request->userData(),
+                $request->staffData(),
+                $request->roleId(),
+                $context,
+                $this->auditContext($request),
+            );
+        } catch (DomainException $exception) {
+            return back()->withErrors(['staff' => $exception->getMessage()])->withInput();
         }
-
-        $request->validate($validationRules);
-
-        DB::transaction(function () use ($request, $staff) {
-            $userData = [
-                'name' => $request->name,
-                'email' => $request->email,
-            ];
-
-            // Actualizar contraseña solo si se proporciona
-            if ($request->filled('password')) {
-                $userData['password'] = Hash::make($request->password);
-            }
-
-            // Actualizar usuario
-            $staff->user->update($userData);
-
-            // Actualizar rol - usar detach/attach en lugar de syncRoles para evitar problemas de cache
-            $staff->user->roles()->detach();
-            $staff->user->roles()->attach($request->role_id);
-
-            // Actualizar staff
-            $staff->update([
-                'phone' => $request->phone,
-                'specialty' => $request->specialty,
-                'license_number' => $request->license_number,
-                'hire_date' => $request->hire_date,
-                'salary' => $request->salary,
-                'is_active' => $request->has('is_active'),
-            ]);
-        });
 
         return redirect()->route('staff.index')->with('success', 'Personal actualizado exitosamente.');
     }
@@ -199,32 +159,33 @@ class StaffController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Staff $staff)
+    public function destroy(Request $request, Staff $staff)
     {
+        $context = $this->clinicContext($request);
+        $staff = $this->staffForContext($staff, $context);
+        Gate::authorize('delete', $staff);
+
         try {
-            // Verificar si hay citas asociadas
-            $appointmentsCount = $staff->appointments()->count();
-            if ($appointmentsCount > 0) {
+            $result = $this->staffService->delete($staff, $context, $this->auditContext($request));
+
+            if ($result['appointments'] > 0) {
                 return redirect()->route('staff.index')
-                    ->with('error', 'No se puede eliminar este personal porque tiene ' . $appointmentsCount . ' citas asociadas. Primero debe reasignar o cancelar las citas.');
+                    ->with('error', 'No se puede eliminar este personal porque tiene '.$result['appointments'].' citas asociadas. Primero debe reasignar o cancelar las citas.');
             }
 
-            // Verificar si hay historiales médicos asociados
-            $medicalRecordsCount = $staff->medicalRecords()->count();
-            if ($medicalRecordsCount > 0) {
+            if ($result['medical_records'] > 0) {
                 return redirect()->route('staff.index')
-                    ->with('error', 'No se puede eliminar este personal porque tiene ' . $medicalRecordsCount . ' historiales médicos asociados.');
+                    ->with('error', 'No se puede eliminar este personal porque tiene '.$result['medical_records'].' historiales médicos asociados.');
             }
-
-            DB::transaction(function () use ($staff) {
-                $staff->delete();
-                $staff->user->delete();
-            });
 
             return redirect()->route('staff.index')->with('success', 'Personal eliminado exitosamente.');
 
-        } catch (\Exception $e) {
-            \Log::error('Error deleting staff member', ['staff_id' => $staff->id, 'error' => $e->getMessage()]);
+        } catch (Throwable $exception) {
+            Log::error('Error deleting staff member', [
+                'staff_id' => $staff->id,
+                'clinic_id' => $context->clinicId,
+                'error' => $exception->getMessage(),
+            ]);
             
             return redirect()->route('staff.index')
                 ->with('error', 'No se puede eliminar este personal porque tiene registros asociados en el sistema.');
@@ -236,6 +197,8 @@ class StaffController extends Controller
      */
     public function exportExcel(Request $request)
     {
+        $this->clinicContext($request);
+        Gate::authorize('exportAny', Staff::class);
         $filters = $request->only(['search', 'specialty', 'is_active']);
         
         $filename = 'personal_' . now()->format('Y-m-d_H-i-s') . '.xlsx';
@@ -248,28 +211,11 @@ class StaffController extends Controller
      */
     public function exportPdf(Request $request)
     {
+        $context = $this->clinicContext($request);
+        Gate::authorize('exportAny', Staff::class);
         $filters = $request->only(['search', 'specialty', 'is_active']);
-        
-        // Obtener personal con filtros aplicados
-        $query = Staff::with(['user.roles']);
-
-        if (!empty($filters['search'])) {
-            $search = $filters['search'];
-            $query->whereHas('user', function($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%");
-            })->orWhere('specialty', 'like', "%{$search}%");
-        }
-
-        if (!empty($filters['specialty'])) {
-            $query->where('specialty', $filters['specialty']);
-        }
-
-        if (!empty($filters['is_active'])) {
-            $query->where('is_active', $filters['is_active']);
-        }
-
-        $staff = $query->orderBy('created_at', 'desc')->get();
+        $staff = $this->filteredQuery($request, $context)->orderBy('created_at', 'desc')->get();
+        $this->staffService->loadClinicRoles($staff, $context);
         
         $filename = 'personal_' . now()->format('Y-m-d_H-i-s') . '.pdf';
         
@@ -282,5 +228,61 @@ class StaffController extends Controller
                   ]);
 
         return $pdf->download($filename);
+    }
+
+    private function filteredQuery(Request $request, ClinicContext $context): Builder
+    {
+        $query = Staff::query()->forClinic($context)->with('user');
+
+        if ($request->filled('search')) {
+            $search = (string) $request->input('search');
+            $query->where(function (Builder $query) use ($search): void {
+                $query->whereHas('user', function (Builder $userQuery) use ($search): void {
+                    $userQuery->where(function (Builder $identityQuery) use ($search): void {
+                        $identityQuery->where('name', 'like', "%{$search}%")
+                            ->orWhere('email', 'like', "%{$search}%");
+                    });
+                })->orWhere('employee_id', 'like', "%{$search}%")
+                    ->orWhere('specialty', 'like', "%{$search}%");
+            });
+        }
+
+        if ($request->filled('specialty')) {
+            $query->where('specialty', $request->input('specialty'));
+        }
+
+        if ($request->filled('is_active') && in_array((string) $request->input('is_active'), ['0', '1'], true)) {
+            $query->where('is_active', $request->boolean('is_active'));
+        }
+
+        return $query;
+    }
+
+    private function clinicContext(Request $request): ClinicContext
+    {
+        $context = $request->attributes->get(ClinicContext::class);
+
+        abort_unless($context instanceof ClinicContext, 403, 'El contexto clínico no está disponible.');
+
+        return $context;
+    }
+
+    private function staffForContext(Staff $staff, ClinicContext $context): Staff
+    {
+        abort_unless($staff->clinic_id !== null && (int) $staff->clinic_id === $context->clinicId, 404);
+
+        return $staff;
+    }
+
+    /**
+     * @return array{ip_address: string, user_agent: string|null, session_id: string|null}
+     */
+    private function auditContext(Request $request): array
+    {
+        return [
+            'ip_address' => $request->ip() ?? 'unknown',
+            'user_agent' => $request->userAgent(),
+            'session_id' => $request->hasSession() ? $request->session()->getId() : null,
+        ];
     }
 }
