@@ -59,6 +59,51 @@ class StaffClinicalIsolationTest extends TestCase
         $this->assertDatabaseHas('staff', ['id' => $foreign->id, 'clinic_id' => $clinicB->id]);
     }
 
+    public function test_suspended_membership_cannot_access_staff_routes(): void
+    {
+        [$operator, $clinic, $membership] = $this->operatorFixture('suspended');
+        $local = $this->staff($clinic, 'Personal Local Suspendido', 'General');
+
+        $membership->update([
+            'status' => 'suspended',
+            'suspended_at' => now(),
+        ]);
+
+        $client = $this->actingAs($operator)->withSession(['clinic_id' => $clinic->id]);
+
+        $client->get(route('staff.index'))->assertForbidden();
+        $client->get(route('staff.show', $local))->assertForbidden();
+
+        $this->assertDatabaseHas('staff', [
+            'id' => $local->id,
+            'clinic_id' => $clinic->id,
+        ]);
+    }
+
+    public function test_read_only_permission_allows_valid_access_but_denies_staff_management(): void
+    {
+        $operator = User::factory()->create(['is_active' => true]);
+        $clinic = $this->clinic('read-only');
+        $readOnlyRole = $this->role('staff-reader', ['view_staff']);
+        $this->membership($operator, $clinic, $readOnlyRole);
+        $local = $this->staff($clinic, 'Personal Visible', 'General');
+
+        $client = $this->actingAs($operator)->withSession(['clinic_id' => $clinic->id]);
+
+        $client->get(route('staff.index'))->assertOk();
+        $client->get(route('staff.show', $local))->assertOk();
+        $client->get(route('staff.create'))->assertForbidden();
+        $client->post(route('staff.store'), [])->assertForbidden();
+        $client->get(route('staff.edit', $local))->assertForbidden();
+        $client->put(route('staff.update', $local), [])->assertForbidden();
+        $client->delete(route('staff.destroy', $local))->assertForbidden();
+
+        $this->assertDatabaseHas('staff', [
+            'id' => $local->id,
+            'clinic_id' => $clinic->id,
+        ]);
+    }
+
     public function test_store_assigns_ownership_employee_code_membership_and_clinic_role_on_the_server(): void
     {
         [$operator, $clinicA] = $this->operatorFixture('store');
@@ -215,16 +260,16 @@ class StaffClinicalIsolationTest extends TestCase
     }
 
     /**
-     * @return array{User, Clinic}
+     * @return array{User, Clinic, ClinicMembership}
      */
     private function operatorFixture(string $suffix): array
     {
-        $operator = User::factory()->create();
+        $operator = User::factory()->create(['is_active' => true]);
         $clinic = $this->clinic($suffix);
         $managerRole = $this->role('manager-'.$suffix, ['view_staff', 'manage_staff']);
-        $this->membership($operator, $clinic, $managerRole);
+        $membership = $this->membership($operator, $clinic, $managerRole);
 
-        return [$operator, $clinic];
+        return [$operator, $clinic, $membership];
     }
 
     private function clinic(string $suffix): Clinic
@@ -271,7 +316,10 @@ class StaffClinicalIsolationTest extends TestCase
         string $specialty,
         ?Role $role = null,
     ): Staff {
-        $user = User::factory()->create(['name' => $name]);
+        $user = User::factory()->create([
+            'name' => $name,
+            'is_active' => true,
+        ]);
         $role ??= $this->role('staff-'.$clinic->id.'-'.uniqid(), []);
         $this->membership($user, $clinic, $role);
 
