@@ -2,35 +2,17 @@
 
 namespace Tests\Feature\Clinics;
 
-use App\Http\Controllers\StaffController;
 use App\Models\Role;
 use App\Models\Staff;
 use App\Models\User;
 use App\Modules\Clinics\Models\Clinic;
 use App\Modules\Clinics\Models\ClinicMembership;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
 class StaffClinicalIsolationTest extends TestCase
 {
     use RefreshDatabase;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-
-        Route::middleware(['web', 'auth', 'clinic.context'])
-            ->prefix('__tests/clinical-staff')
-            ->group(function (): void {
-                Route::get('/', [StaffController::class, 'index'])->name('tests.staff.index');
-                Route::post('/', [StaffController::class, 'store'])->name('tests.staff.store');
-                Route::get('/{staff}', [StaffController::class, 'show'])->name('tests.staff.show');
-                Route::get('/{staff}/edit', [StaffController::class, 'edit'])->name('tests.staff.edit');
-                Route::put('/{staff}', [StaffController::class, 'update'])->name('tests.staff.update');
-                Route::delete('/{staff}', [StaffController::class, 'destroy'])->name('tests.staff.destroy');
-            });
-    }
 
     public function test_context_is_required_and_the_index_cannot_escape_its_clinic_with_an_or_search(): void
     {
@@ -44,12 +26,12 @@ class StaffClinicalIsolationTest extends TestCase
         $foreign = $this->staff($clinicB, 'Nombre Ajeno', 'Secreto Buscable');
 
         $this->actingAs($operator)
-            ->get(route('tests.staff.index'))
+            ->get(route('staff.index'))
             ->assertForbidden();
 
         $unfiltered = $this->actingAs($operator)
             ->withSession(['clinic_id' => $clinicA->id])
-            ->get(route('tests.staff.index'));
+            ->get(route('staff.index'));
         $unfiltered->assertOk();
         $unfiltered->assertViewHas('staff', function ($staff) use ($local, $foreign): bool {
             $ids = $staff->getCollection()->modelKeys();
@@ -60,7 +42,7 @@ class StaffClinicalIsolationTest extends TestCase
 
         $response = $this->actingAs($operator)
             ->withSession(['clinic_id' => $clinicA->id])
-            ->get(route('tests.staff.index', ['search' => 'Secreto Buscable']));
+            ->get(route('staff.index', ['search' => 'Secreto Buscable']));
 
         $response->assertOk();
         $response->assertViewHas('staff', function ($staff) use ($local, $foreign): bool {
@@ -71,7 +53,7 @@ class StaffClinicalIsolationTest extends TestCase
         });
     }
 
-    public function test_direct_operations_return_not_found_for_staff_from_another_clinic(): void
+    public function test_direct_operations_are_denied_for_staff_from_another_clinic(): void
     {
         [$operator, $clinicA] = $this->operatorFixture('cross');
         $clinicB = $this->clinic('cross-B');
@@ -80,10 +62,10 @@ class StaffClinicalIsolationTest extends TestCase
 
         $client = $this->actingAs($operator)->withSession(['clinic_id' => $clinicA->id]);
 
-        $client->get(route('tests.staff.show', $foreign))->assertNotFound();
-        $client->get(route('tests.staff.edit', $foreign))->assertNotFound();
-        $client->put(route('tests.staff.update', $foreign), $payload)->assertNotFound();
-        $client->delete(route('tests.staff.destroy', $foreign))->assertNotFound();
+        $client->get(route('staff.show', $foreign))->assertForbidden();
+        $client->get(route('staff.edit', $foreign))->assertForbidden();
+        $client->put(route('staff.update', $foreign), $payload)->assertForbidden();
+        $client->delete(route('staff.destroy', $foreign))->assertForbidden();
 
         $this->assertDatabaseHas('staff', ['id' => $foreign->id, 'clinic_id' => $clinicB->id]);
     }
@@ -109,7 +91,7 @@ class StaffClinicalIsolationTest extends TestCase
 
         $this->actingAs($operator)
             ->withSession(['clinic_id' => $clinicA->id])
-            ->post(route('tests.staff.store'), $payload)
+            ->post(route('staff.store'), $payload)
             ->assertRedirect(route('staff.index'))
             ->assertSessionHas('success');
 
@@ -143,7 +125,7 @@ class StaffClinicalIsolationTest extends TestCase
         ]);
         $this->actingAs($operator)
             ->withSession(['clinic_id' => $clinicA->id])
-            ->post(route('tests.staff.store'), $spoofed)
+            ->post(route('staff.store'), $spoofed)
             ->assertSessionHasErrors('clinic_id');
         $this->assertDatabaseMissing('users', ['email' => 'spoofed@example.test']);
     }
@@ -165,7 +147,7 @@ class StaffClinicalIsolationTest extends TestCase
 
         $this->actingAs($operator)
             ->withSession(['clinic_id' => $clinic->id])
-            ->put(route('tests.staff.update', $staff), $payload)
+            ->put(route('staff.update', $staff), $payload)
             ->assertRedirect(route('staff.index'))
             ->assertSessionHas('success');
 
@@ -207,7 +189,7 @@ class StaffClinicalIsolationTest extends TestCase
 
         $this->actingAs($operator)
             ->withSession(['clinic_id' => $clinicA->id])
-            ->put(route('tests.staff.update', $staff), $payload)
+            ->put(route('staff.update', $staff), $payload)
             ->assertSessionHasErrors('email');
 
         $this->assertSame('Identidad Compartida', $staff->user->fresh()->name);
@@ -228,7 +210,7 @@ class StaffClinicalIsolationTest extends TestCase
 
         $this->actingAs($operator)
             ->withSession(['clinic_id' => $clinicA->id])
-            ->delete(route('tests.staff.destroy', $staff))
+            ->delete(route('staff.destroy', $staff))
             ->assertRedirect(route('staff.index'))
             ->assertSessionHas('success');
 
