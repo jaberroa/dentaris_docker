@@ -12,12 +12,21 @@ class ClinicOwnedDomainReadinessService
         'billing' => ['invoices', 'payments'],
     ];
 
+    /** @var list<string> */
+    private const FAIL_CLOSED_DOMAINS = ['procurement'];
+
     public function __construct(
         private readonly ConnectionInterface $connection,
     ) {}
 
     public function isReady(string $domain): bool
     {
+        // Schema alone cannot open procurement: its controllers and bindings
+        // still need clinic-scoped policies in a separate mandate.
+        if (in_array($domain, self::FAIL_CLOSED_DOMAINS, true)) {
+            return false;
+        }
+
         $tables = self::DOMAIN_TABLES[$domain] ?? [];
 
         if ($tables === []) {

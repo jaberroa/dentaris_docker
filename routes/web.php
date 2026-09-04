@@ -323,16 +323,27 @@ Route::middleware(['auth', 'clinic.selection'])->group(function () {
         Route::delete('/quotes/{quote}', [QuoteController::class, 'destroy'])->name('quotes.destroy');
     });
     
-    // Gestión de Proveedores
-    Route::get('/suppliers', [SupplierController::class, 'index'])->name('suppliers.index');
-    Route::get('/suppliers/{supplier}', [SupplierController::class, 'show'])->name('suppliers.show');
-    
-    Route::middleware('can:manage_suppliers')->group(function () {
-        Route::get('/suppliers/create', [SupplierController::class, 'create'])->name('suppliers.create');
-        Route::post('/suppliers', [SupplierController::class, 'store'])->name('suppliers.store');
-        Route::get('/suppliers/{supplier}/edit', [SupplierController::class, 'edit'])->name('suppliers.edit');
-        Route::put('/suppliers/{supplier}', [SupplierController::class, 'update'])->name('suppliers.update');
-        Route::delete('/suppliers/{supplier}', [SupplierController::class, 'destroy'])->name('suppliers.destroy');
+    // Proveedores y compras permanecen cerrados hasta definir su propiedad clínica.
+    Route::middleware(['clinic.context', 'clinic.domain.ready:procurement'])->group(function () {
+        Route::middleware('permission:view_inventory')->group(function () {
+            Route::get('/suppliers', [SupplierController::class, 'index'])->name('suppliers.index');
+            Route::get('/suppliers/{supplier}', [SupplierController::class, 'show'])->name('suppliers.show');
+            Route::get('/purchases', [PurchaseController::class, 'index'])->name('purchases.index');
+            Route::get('/purchases/{purchase}', [PurchaseController::class, 'show'])->name('purchases.show');
+        });
+
+        Route::middleware('permission:manage_inventory')->group(function () {
+            Route::get('/suppliers/create', [SupplierController::class, 'create'])->name('suppliers.create');
+            Route::post('/suppliers', [SupplierController::class, 'store'])->name('suppliers.store');
+            Route::get('/suppliers/{supplier}/edit', [SupplierController::class, 'edit'])->name('suppliers.edit');
+            Route::put('/suppliers/{supplier}', [SupplierController::class, 'update'])->name('suppliers.update');
+            Route::delete('/suppliers/{supplier}', [SupplierController::class, 'destroy'])->name('suppliers.destroy');
+            Route::get('/purchases/create', [PurchaseController::class, 'create'])->name('purchases.create');
+            Route::post('/purchases', [PurchaseController::class, 'store'])->name('purchases.store');
+            Route::get('/purchases/{purchase}/edit', [PurchaseController::class, 'edit'])->name('purchases.edit');
+            Route::put('/purchases/{purchase}', [PurchaseController::class, 'update'])->name('purchases.update');
+            Route::delete('/purchases/{purchase}', [PurchaseController::class, 'destroy'])->name('purchases.destroy');
+        });
     });
     
     // Gestión de Tratamientos
@@ -373,18 +384,6 @@ Route::middleware(['auth', 'clinic.selection'])->group(function () {
             ->name('payments.show');
     });
     
-    // Gestión de Compras
-    Route::get('/purchases', [PurchaseController::class, 'index'])->name('purchases.index');
-    Route::get('/purchases/{purchase}', [PurchaseController::class, 'show'])->name('purchases.show');
-    
-    Route::middleware('can:manage_purchases')->group(function () {
-        Route::get('/purchases/create', [PurchaseController::class, 'create'])->name('purchases.create');
-        Route::post('/purchases', [PurchaseController::class, 'store'])->name('purchases.store');
-        Route::get('/purchases/{purchase}/edit', [PurchaseController::class, 'edit'])->name('purchases.edit');
-        Route::put('/purchases/{purchase}', [PurchaseController::class, 'update'])->name('purchases.update');
-        Route::delete('/purchases/{purchase}', [PurchaseController::class, 'destroy'])->name('purchases.destroy');
-    });
-
 });
 
 Route::fallback(function () {

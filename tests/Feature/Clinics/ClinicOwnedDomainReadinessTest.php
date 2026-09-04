@@ -107,4 +107,17 @@ class ClinicOwnedDomainReadinessTest extends TestCase
             ->assertStatus(503)
             ->assertJsonPath('code', 'CLINIC_DOMAIN_NOT_READY');
     }
+
+    public function test_procurement_fails_closed_until_suppliers_products_and_purchases_have_ownership(): void
+    {
+        $user = User::factory()->create(['is_active' => true]);
+        $context = $this->clinicalContextFor($user, ['view_inventory', 'manage_inventory']);
+
+        foreach (['suppliers.index', 'purchases.index'] as $routeName) {
+            $this->actingAs($user)->withSession(['clinic_id' => $context->clinicId])
+                ->getJson(route($routeName))
+                ->assertStatus(503)
+                ->assertJsonPath('code', 'CLINIC_DOMAIN_NOT_READY');
+        }
+    }
 }

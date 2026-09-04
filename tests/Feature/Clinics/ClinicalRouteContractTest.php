@@ -165,6 +165,10 @@ class ClinicalRouteContractTest extends TestCase
             'billing.show' => 'clinic.domain.ready:billing',
             'payments.index' => 'clinic.domain.ready:billing',
             'payments.store' => 'clinic.domain.ready:billing',
+            'suppliers.index' => 'clinic.domain.ready:procurement',
+            'suppliers.store' => 'clinic.domain.ready:procurement',
+            'purchases.index' => 'clinic.domain.ready:procurement',
+            'purchases.store' => 'clinic.domain.ready:procurement',
         ];
 
         foreach ($domains as $name => $readiness) {

@@ -139,8 +139,12 @@ El navegador quedó sin errores de consola después de montar los assets correct
 - No se modificaron `clinipro/` ni `Clivax_Laravel_v1.1.0/`.
 - `clinic_id` permanece nullable.
 
+## Seguimiento: Mandato 14A
+
+El Mandato 14A implementó y probó el mecanismo de transición y la carga QA idempotente, pero el dry-run real confirmó que la migración nullable sigue pendiente y que el actor visual carece de los dos permisos de pagos. No se ejecutaron migraciones ni se crearon datos QA. La evidencia detallada está en `PHASE-1-MANDATE-14A-OWNERSHIP-TRANSITION-AND-QA-DENTARIS.md`.
+
 ## Siguiente mandato recomendado
 
-**Mandato 14A — transición controlada de propiedad clínica.** Debe inventariar filas históricas, demostrar la regla de asignación por tabla, ejecutar primero la migración nullable con autorización, realizar un backfill auditable por lotes, detenerse ante cualquier ambigüedad, validar claves y relaciones, probar rollback operativo y confirmar que el middleware de readiness abre cada dominio solo después de quedar consistente.
+**Mandato 14B — ejecución autorizada de esquema y habilitación QA.** Debe aplicar exclusivamente la migración nullable ya revisada, verificar estructura, ejecutar la transición idempotente, añadir los permisos clínicos de pagos de forma trazable, crear los cinco registros QA por vista y realizar la validación visual.
 
 Modelo recomendado: `gpt-5.6-sol`. Esfuerzo recomendado: `high`, elevable a `xhigh` si el inventario revela asignaciones ambiguas o múltiples clínicas candidatas.
