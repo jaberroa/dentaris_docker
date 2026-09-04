@@ -42,12 +42,12 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                @forelse($medicalRegistros as $record)
+                                @forelse($records as $record)
                                 <tr>
                                     <td>{{ $record->id }}</td>
-                                    <td>{{ $record->patient->name ?? 'N/A' }}</td>
+                                    <td>{{ $record->patient->full_name ?? 'N/A' }}</td>
                                     <td>{{ $record->created_at->format('d/m/Y') }}</td>
-                                    <td>{{ Str::limit($record->diagnosis ?? 'Sin diagnóstico', 50) }}</td>
+                                    <td>{{ Str::limit($record->diagnostic_impression ?? 'Sin diagnóstico', 50) }}</td>
                                     <td>
                                         <div class="d-flex gap-2">
                                             <a href="{{ route('medical-records.show', $record) }}" class="btn btn-sm btn-outline-primary">
