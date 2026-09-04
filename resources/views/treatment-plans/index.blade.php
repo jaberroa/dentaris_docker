@@ -222,7 +222,7 @@
 @endsection
 
 @php
-function getSortUrl($field, $currentSort, $currentDirection) {
+$getTreatmentPlanSortUrl = static function ($field, $currentSort, $currentDirection) {
     $params = request()->query();
     
     if ($currentSort === $field && $currentDirection === 'asc') {
@@ -234,9 +234,9 @@ function getSortUrl($field, $currentSort, $currentDirection) {
     $params['sort'] = $field;
     
     return request()->url() . '?' . http_build_query($params);
-}
+};
 
-function getSortIcon($field, $currentSort, $currentDirection) {
+$getTreatmentPlanSortIcon = static function ($field, $currentSort, $currentDirection) {
     if ($currentSort !== $field) {
         return '<i class="fas fa-sort sort-icon"></i>';
     }
@@ -246,14 +246,7 @@ function getSortIcon($field, $currentSort, $currentDirection) {
     } else {
         return '<i class="fas fa-sort-down sort-icon active"></i>';
     }
-}
-
-function getSortClass($field, $currentSort, $currentDirection) {
-    if ($currentSort === $field) {
-        return $currentDirection === 'asc' ? 'sort-asc' : 'sort-desc';
-    }
-    return '';
-}
+};
 
 $sortField = request('sort', 'id');
 $sortDirection = request('direction', 'desc');
@@ -440,39 +433,39 @@ $sortDirection = request('direction', 'desc');
                             <thead>
                                 <tr>
                                     <th>
-                                        <a href="{{ getSortUrl('id', $sortField ?? '', $sortDirection ?? '') }}">
+                                        <a href="{{ $getTreatmentPlanSortUrl('id', $sortField ?? '', $sortDirection ?? '') }}">
                                             Código
-                                            {!! getSortIcon('id', $sortField ?? '', $sortDirection ?? '') !!}
+                                            {!! $getTreatmentPlanSortIcon('id', $sortField ?? '', $sortDirection ?? '') !!}
                                         </a>
                                     </th>
                                     <th>
-                                        <a href="{{ getSortUrl('patient_id', $sortField ?? '', $sortDirection ?? '') }}">
+                                        <a href="{{ $getTreatmentPlanSortUrl('patient_id', $sortField ?? '', $sortDirection ?? '') }}">
                                             Paciente
-                                            {!! getSortIcon('patient_id', $sortField ?? '', $sortDirection ?? '') !!}
+                                            {!! $getTreatmentPlanSortIcon('patient_id', $sortField ?? '', $sortDirection ?? '') !!}
                                         </a>
                                     </th>
                                     <th>
-                                        <a href="{{ getSortUrl('treatment_name', $sortField ?? '', $sortDirection ?? '') }}">
+                                        <a href="{{ $getTreatmentPlanSortUrl('treatment_name', $sortField ?? '', $sortDirection ?? '') }}">
                                             Tratamiento
-                                            {!! getSortIcon('treatment_name', $sortField ?? '', $sortDirection ?? '') !!}
+                                            {!! $getTreatmentPlanSortIcon('treatment_name', $sortField ?? '', $sortDirection ?? '') !!}
                                         </a>
                                     </th>
                                     <th>
-                                        <a href="{{ getSortUrl('start_date', $sortField ?? '', $sortDirection ?? '') }}">
+                                        <a href="{{ $getTreatmentPlanSortUrl('start_date', $sortField ?? '', $sortDirection ?? '') }}">
                                             Fecha Inicio
-                                            {!! getSortIcon('start_date', $sortField ?? '', $sortDirection ?? '') !!}
+                                            {!! $getTreatmentPlanSortIcon('start_date', $sortField ?? '', $sortDirection ?? '') !!}
                                         </a>
                                     </th>
                                     <th>
-                                        <a href="{{ getSortUrl('status', $sortField ?? '', $sortDirection ?? '') }}">
+                                        <a href="{{ $getTreatmentPlanSortUrl('status', $sortField ?? '', $sortDirection ?? '') }}">
                                             Estado
-                                            {!! getSortIcon('status', $sortField ?? '', $sortDirection ?? '') !!}
+                                            {!! $getTreatmentPlanSortIcon('status', $sortField ?? '', $sortDirection ?? '') !!}
                                         </a>
                                     </th>
                                     <th>
-                                        <a href="{{ getSortUrl('progress', $sortField ?? '', $sortDirection ?? '') }}">
+                                        <a href="{{ $getTreatmentPlanSortUrl('progress', $sortField ?? '', $sortDirection ?? '') }}">
                                             Progreso
-                                            {!! getSortIcon('progress', $sortField ?? '', $sortDirection ?? '') !!}
+                                            {!! $getTreatmentPlanSortIcon('progress', $sortField ?? '', $sortDirection ?? '') !!}
                                         </a>
                                     </th>
                                     <th>Acciones</th>

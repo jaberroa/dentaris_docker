@@ -4,6 +4,9 @@ namespace Tests\Feature\Clinics;
 
 use App\Exports\PatientsExport;
 use App\Exports\StaffExport;
+use App\Http\Controllers\AppointmentController;
+use App\Http\Controllers\BillingController;
+use App\Http\Controllers\MedicalRecordController;
 use App\Http\Controllers\PatientController;
 use App\Http\Controllers\StaffController;
 use App\Models\Patient;
@@ -57,6 +60,55 @@ class ClinicalRouteContractTest extends TestCase
             $this->assertNotNull($route, "Missing route [{$name}].");
             $this->assertContains('clinic.context', $route->gatherMiddleware(), $name);
             $this->assertContains($permission, $route->gatherMiddleware(), $name);
+        }
+    }
+
+    public function test_appointments_medical_records_inventory_and_billing_run_clinic_context_before_permissions(): void
+    {
+        $routes = [
+            'appointments.index' => 'permission:view_appointments',
+            'appointments.search.staff' => 'permission:view_appointments',
+            'appointments.store' => 'permission:manage_appointments',
+            'appointments.update' => 'permission:manage_appointments',
+            'medical-records.index' => 'permission:view_medical_records',
+            'medical-records.store' => 'permission:manage_medical_records',
+            'medical-records.update' => 'permission:manage_medical_records',
+            'medical-records.export' => 'permission:view_medical_records',
+            'inventory.movements' => 'permission:view_inventory',
+            'inventory.locations.index' => 'permission:view_inventory',
+            'inventory.locations.store' => 'permission:manage_inventory',
+            'inventory.export' => 'permission:export_inventory',
+            'billing.create' => 'permission:manage_billing',
+            'billing.store' => 'permission:manage_billing',
+            'billing.update' => 'permission:manage_billing',
+        ];
+
+        foreach ($routes as $name => $permission) {
+            $route = Route::getRoutes()->getByName($name);
+            $middleware = $route?->gatherMiddleware() ?? [];
+            $contextIndex = array_search('clinic.context', $middleware, true);
+            $permissionIndex = array_search($permission, $middleware, true);
+
+            $this->assertNotNull($route, "Missing route [{$name}].");
+            $this->assertNotFalse($contextIndex, "Missing clinic.context on [{$name}].");
+            $this->assertNotFalse($permissionIndex, "Missing {$permission} on [{$name}].");
+            $this->assertLessThan($permissionIndex, $contextIndex, "clinic.context must run before {$permission} on [{$name}].");
+        }
+    }
+
+    public function test_static_appointment_medical_record_and_billing_routes_are_not_shadowed(): void
+    {
+        $expected = [
+            '/appointments/search-staff' => AppointmentController::class.'@searchStaff',
+            '/appointments/create' => AppointmentController::class.'@create',
+            '/medical-records/create' => MedicalRecordController::class.'@create',
+            '/billing/create' => BillingController::class.'@create',
+        ];
+
+        foreach ($expected as $uri => $action) {
+            $route = Route::getRoutes()->match(Request::create($uri, 'GET'));
+
+            $this->assertSame($action, $route->getActionName(), $uri);
         }
     }
 

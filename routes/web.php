@@ -102,92 +102,121 @@ Route::middleware('auth')->group(function () {
     });
     
     // Gestión de Historias Clínicas
-    Route::get('/medical-records', [MedicalRecordController::class, 'index'])->name('medical-records.index');
-        Route::get('/medical-records/create', [MedicalRecordController::class, 'create'])->name('medical-records.create');
-        Route::post('/medical-records', [MedicalRecordController::class, 'store'])->name('medical-records.store');
-    Route::get('/medical-records/{medicalRecord}', [MedicalRecordController::class, 'show'])->name('medical-records.show');
-        Route::get('/medical-records/{medicalRecord}/edit', [MedicalRecordController::class, 'edit'])->name('medical-records.edit');
-        Route::put('/medical-records/{medicalRecord}', [MedicalRecordController::class, 'update'])->name('medical-records.update');
-        Route::delete('/medical-records/{medicalRecord}', [MedicalRecordController::class, 'destroy'])->name('medical-records.destroy');
-        Route::get('/medical-records/{medicalRecord}/export', [MedicalRecordController::class, 'exportPdf'])->name('medical-records.export');
-    Route::get('/patients/{patient}/medical-records', [MedicalRecordController::class, 'getPatientRecords'])->name('patients.medical-records');
-    
-    // Gestión de Citas
-    Route::get('/appointments', [AppointmentController::class, 'index'])->name('appointments.index');
-    Route::get('/appointments/weekly', [AppointmentController::class, 'weekly'])->name('appointments.weekly');
-    Route::get('/appointments/monthly', [AppointmentController::class, 'monthly'])->name('appointments.monthly');
-    Route::get('/appointments/yearly', [AppointmentController::class, 'yearly'])->name('appointments.yearly');
-    
-    // Rutas específicas (deben ir antes que las rutas con parámetros)
-    Route::get('/appointments/create', [AppointmentController::class, 'create'])->name('appointments.create');
-    Route::post('/appointments', [AppointmentController::class, 'store'])->name('appointments.store');
-    
-    // Rutas con parámetros (deben ir al final)
-    Route::get('/appointments/{appointment}', [AppointmentController::class, 'show'])->name('appointments.show');
-    Route::get('/appointments/{appointment}/edit', [AppointmentController::class, 'edit'])->name('appointments.edit');
-    Route::put('/appointments/{appointment}', [AppointmentController::class, 'update'])->name('appointments.update');
-    Route::delete('/appointments/{appointment}', [AppointmentController::class, 'destroy'])->name('appointments.destroy');
-    Route::post('/appointments/{appointment}/confirm', [AppointmentController::class, 'confirm'])->name('appointments.confirm');
-    Route::post('/appointments/{appointment}/cancel', [AppointmentController::class, 'cancel'])->name('appointments.cancel');
-    Route::patch('/appointments/{appointment}/status', [AppointmentController::class, 'updateStatus'])->name('appointments.update.status');
-    Route::get('/appointments/search-staff', [AppointmentController::class, 'searchStaff'])->name('appointments.search.staff');
-    
-    // Gestión de Inventario
-    Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory.index');
-    Route::get('/inventory/movements', [InventoryController::class, 'movements'])
-        ->middleware('permission:view_inventory')
-        ->name('inventory.movements');
-    Route::get('/inventory/locations', [InventoryLocationController::class, 'index'])
-        ->middleware('permission:view_inventory')
-        ->name('inventory.locations.index');
-    Route::get('/inventory/low-stock', [InventoryController::class, 'lowStock'])->name('inventory.low-stock');
-    Route::get('/inventory/out-of-stock', [InventoryController::class, 'outOfStock'])->name('inventory.out-of-stock');
-    Route::get('/inventory/expiring-soon', [InventoryController::class, 'expiringSoon'])->name('inventory.expiring-soon');
-    Route::get('/inventory/report', [InventoryController::class, 'report'])->name('inventory.report');
-    Route::get('/inventory/{inventory}', [InventoryController::class, 'show'])
-        ->middleware('can:view,inventory')
-        ->name('inventory.show');
-    
-    Route::middleware('permission:manage_inventory')->group(function () {
-        Route::post('/inventory/locations', [InventoryLocationController::class, 'store'])->name('inventory.locations.store');
-        Route::put('/inventory/locations/{inventoryLocation}', [InventoryLocationController::class, 'update'])->name('inventory.locations.update');
-        Route::put('/inventory/{inventory}', [InventoryController::class, 'update'])
-            ->middleware('can:update,inventory')
-            ->name('inventory.update');
-        Route::post('/inventory/transfer', [InventoryController::class, 'transfer'])->name('inventory.transfer');
-        Route::post('/inventory/{inventory}/locations', [InventoryLocationController::class, 'createStockLocation'])
-            ->middleware('can:update,inventory')
-            ->name('inventory.locations.stock.store');
+    Route::middleware('clinic.context')->group(function () {
+        Route::get('/medical-records', [MedicalRecordController::class, 'index'])
+            ->middleware('permission:view_medical_records')
+            ->name('medical-records.index');
+
+        Route::middleware('permission:manage_medical_records')->group(function () {
+            Route::get('/medical-records/create', [MedicalRecordController::class, 'create'])->name('medical-records.create');
+            Route::post('/medical-records', [MedicalRecordController::class, 'store'])->name('medical-records.store');
+        });
+
+        Route::middleware('permission:view_medical_records')->group(function () {
+            Route::get('/medical-records/{medicalRecord}', [MedicalRecordController::class, 'show'])->name('medical-records.show');
+            Route::get('/medical-records/{medicalRecord}/export', [MedicalRecordController::class, 'exportPdf'])->name('medical-records.export');
+            Route::get('/patients/{patient}/medical-records', [MedicalRecordController::class, 'getPatientRecords'])->name('patients.medical-records');
+        });
+
+        Route::middleware('permission:manage_medical_records')->group(function () {
+            Route::get('/medical-records/{medicalRecord}/edit', [MedicalRecordController::class, 'edit'])->name('medical-records.edit');
+            Route::put('/medical-records/{medicalRecord}', [MedicalRecordController::class, 'update'])->name('medical-records.update');
+            Route::delete('/medical-records/{medicalRecord}', [MedicalRecordController::class, 'destroy'])->name('medical-records.destroy');
+        });
     });
 
-    Route::post('/inventory/{inventory}/adjust', [InventoryController::class, 'adjust'])
-        ->middleware('can:adjust,inventory')
-        ->name('inventory.adjust');
-    Route::post('/inventory/movements/{movement}/reverse', [InventoryController::class, 'reverseMovement'])
-        ->middleware('can:reverse,movement')
-        ->name('inventory.movements.reverse');
-    Route::post('/inventory/export', [InventoryController::class, 'export'])
-        ->middleware('permission:export_inventory')
-        ->name('inventory.export');
+    // Gestión de Citas
+    Route::middleware('clinic.context')->group(function () {
+        Route::middleware('permission:view_appointments')->group(function () {
+            Route::get('/appointments', [AppointmentController::class, 'index'])->name('appointments.index');
+            Route::get('/appointments/weekly', [AppointmentController::class, 'weekly'])->name('appointments.weekly');
+            Route::get('/appointments/monthly', [AppointmentController::class, 'monthly'])->name('appointments.monthly');
+            Route::get('/appointments/yearly', [AppointmentController::class, 'yearly'])->name('appointments.yearly');
+            Route::get('/appointments/search-staff', [AppointmentController::class, 'searchStaff'])->name('appointments.search.staff');
+        });
+
+        Route::middleware('permission:manage_appointments')->group(function () {
+            Route::get('/appointments/create', [AppointmentController::class, 'create'])->name('appointments.create');
+            Route::post('/appointments', [AppointmentController::class, 'store'])->name('appointments.store');
+        });
+
+        Route::get('/appointments/{appointment}', [AppointmentController::class, 'show'])
+            ->middleware('permission:view_appointments')
+            ->name('appointments.show');
+
+        Route::middleware('permission:manage_appointments')->group(function () {
+            Route::get('/appointments/{appointment}/edit', [AppointmentController::class, 'edit'])->name('appointments.edit');
+            Route::put('/appointments/{appointment}', [AppointmentController::class, 'update'])->name('appointments.update');
+            Route::delete('/appointments/{appointment}', [AppointmentController::class, 'destroy'])->name('appointments.destroy');
+            Route::post('/appointments/{appointment}/confirm', [AppointmentController::class, 'confirm'])->name('appointments.confirm');
+            Route::post('/appointments/{appointment}/cancel', [AppointmentController::class, 'cancel'])->name('appointments.cancel');
+            Route::patch('/appointments/{appointment}/status', [AppointmentController::class, 'updateStatus'])->name('appointments.update.status');
+        });
+    });
+    
+    // Gestión de Inventario
+    Route::middleware('clinic.context')->group(function () {
+        Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory.index');
+        Route::get('/inventory/movements', [InventoryController::class, 'movements'])
+            ->middleware('permission:view_inventory')
+            ->name('inventory.movements');
+        Route::get('/inventory/locations', [InventoryLocationController::class, 'index'])
+            ->middleware('permission:view_inventory')
+            ->name('inventory.locations.index');
+        Route::get('/inventory/low-stock', [InventoryController::class, 'lowStock'])->name('inventory.low-stock');
+        Route::get('/inventory/out-of-stock', [InventoryController::class, 'outOfStock'])->name('inventory.out-of-stock');
+        Route::get('/inventory/expiring-soon', [InventoryController::class, 'expiringSoon'])->name('inventory.expiring-soon');
+        Route::get('/inventory/report', [InventoryController::class, 'report'])->name('inventory.report');
+        Route::get('/inventory/{inventory}', [InventoryController::class, 'show'])
+            ->middleware('can:view,inventory')
+            ->name('inventory.show');
+
+        Route::middleware('permission:manage_inventory')->group(function () {
+            Route::post('/inventory/locations', [InventoryLocationController::class, 'store'])->name('inventory.locations.store');
+            Route::put('/inventory/locations/{inventoryLocation}', [InventoryLocationController::class, 'update'])->name('inventory.locations.update');
+            Route::put('/inventory/{inventory}', [InventoryController::class, 'update'])
+                ->middleware('can:update,inventory')
+                ->name('inventory.update');
+            Route::post('/inventory/transfer', [InventoryController::class, 'transfer'])->name('inventory.transfer');
+            Route::post('/inventory/{inventory}/locations', [InventoryLocationController::class, 'createStockLocation'])
+                ->middleware('can:update,inventory')
+                ->name('inventory.locations.stock.store');
+        });
+
+        Route::post('/inventory/{inventory}/adjust', [InventoryController::class, 'adjust'])
+            ->middleware('can:adjust,inventory')
+            ->name('inventory.adjust');
+        Route::post('/inventory/movements/{movement}/reverse', [InventoryController::class, 'reverseMovement'])
+            ->middleware('can:reverse,movement')
+            ->name('inventory.movements.reverse');
+        Route::post('/inventory/export', [InventoryController::class, 'export'])
+            ->middleware('permission:export_inventory')
+            ->name('inventory.export');
+    });
     
     // Gestión de Facturación
-    Route::get('/billing', [BillingController::class, 'index'])->name('billing.index');
-    Route::get('/billing/{invoice}', [BillingController::class, 'show'])
-        ->middleware('can:view,invoice')
-        ->name('billing.show');
-    Route::get('/billing/{invoice}/pdf', [BillingController::class, 'downloadPdf'])->middleware('can:view,invoice')->name('billing.pdf');
-    
-    Route::middleware('permission:manage_billing')->group(function () {
-        Route::get('/billing/create', [BillingController::class, 'create'])->name('billing.create');
-        Route::post('/billing', [BillingController::class, 'store'])->name('billing.store');
-        Route::get('/billing/{invoice}/edit', [BillingController::class, 'edit'])
-            ->middleware('can:update,invoice')->name('billing.edit');
-        Route::put('/billing/{invoice}', [BillingController::class, 'update'])
-            ->middleware('can:update,invoice')->name('billing.update');
-        Route::delete('/billing/{invoice}', [BillingController::class, 'destroy'])
-            ->middleware('can:delete,invoice')->name('billing.destroy');
-        Route::post('/billing/{invoice}/send', [BillingController::class, 'sendInvoice'])
-            ->middleware('can:send,invoice')->name('billing.send');
+    Route::middleware('clinic.context')->group(function () {
+        Route::get('/billing', [BillingController::class, 'index'])->name('billing.index');
+
+        Route::middleware('permission:manage_billing')->group(function () {
+            Route::get('/billing/create', [BillingController::class, 'create'])->name('billing.create');
+            Route::post('/billing', [BillingController::class, 'store'])->name('billing.store');
+            Route::get('/billing/{invoice}/edit', [BillingController::class, 'edit'])
+                ->middleware('can:update,invoice')->name('billing.edit');
+            Route::put('/billing/{invoice}', [BillingController::class, 'update'])
+                ->middleware('can:update,invoice')->name('billing.update');
+            Route::delete('/billing/{invoice}', [BillingController::class, 'destroy'])
+                ->middleware('can:delete,invoice')->name('billing.destroy');
+            Route::post('/billing/{invoice}/send', [BillingController::class, 'sendInvoice'])
+                ->middleware('can:send,invoice')->name('billing.send');
+        });
+
+        Route::get('/billing/{invoice}/pdf', [BillingController::class, 'downloadPdf'])
+            ->middleware('can:view,invoice')
+            ->name('billing.pdf');
+        Route::get('/billing/{invoice}', [BillingController::class, 'show'])
+            ->middleware('can:view,invoice')
+            ->name('billing.show');
     });
     
     // Gestión de Reportes

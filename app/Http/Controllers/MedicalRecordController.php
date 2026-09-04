@@ -2,18 +2,19 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Clinics\MedicalRecordRequest;
 use App\Models\MedicalRecord;
 use App\Models\Patient;
-use App\Models\Staff;
+use App\Modules\Clinics\Services\ClinicalRelatedRecordAccessService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class MedicalRecordController extends Controller
 {
-    public function __construct()
-    {
-        // Middleware de roles removido temporalmente
+    public function __construct(
+        private readonly ClinicalRelatedRecordAccessService $clinicalRecords,
+    ) {
     }
 
     /**
@@ -21,7 +22,9 @@ class MedicalRecordController extends Controller
      */
     public function index(Request $request)
     {
-        $query = MedicalRecord::with(['patient', 'staff.user', 'appointment'])
+        $context = $this->clinicalRecords->context($request);
+        $query = $this->clinicalRecords->medicalRecords($context)
+            ->with(['patient', 'staff.user', 'appointment'])
             ->orderBy('created_at', 'desc');
 
         // Filtros
@@ -67,13 +70,14 @@ class MedicalRecordController extends Controller
      */
     public function create(Request $request)
     {
+        $context = $this->clinicalRecords->context($request);
         $patient = null;
         if ($request->filled('patient_id')) {
-            $patient = Patient::findOrFail($request->patient_id);
+            $patient = $this->clinicalRecords->patients($context)->findOrFail($request->patient_id);
         }
 
-        $staff = Staff::with('user')->get();
-        $patients = Patient::active()->get();
+        $staff = $this->clinicalRecords->staff($context)->with('user')->active()->get();
+        $patients = $this->clinicalRecords->patients($context)->active()->get();
 
         return view('medical-records.create', compact('patient', 'staff', 'patients'));
     }
@@ -81,61 +85,42 @@ class MedicalRecordController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
+    public function store(MedicalRecordRequest $request)
     {
-        \Log::info('=== MEDICAL RECORD STORE METHOD CALLED ===', ['request_data' => $request->all()]);
-        
-        $request->validate([
-            'patient_id' => 'required|exists:patients,id',
-            'staff_id' => 'required|exists:staff,id',
-            'record_type' => 'required|in:consulta,tratamiento,seguimiento,urgencia',
-            'chief_complaint' => 'required|string|max:1000',
-            'present_illness' => 'nullable|string|max:2000',
-            'medical_history' => 'nullable|string|max:2000',
-            'dental_history' => 'nullable|string|max:2000',
-            'family_history' => 'nullable|string|max:2000',
-            'social_history' => 'nullable|string|max:2000',
-            'clinical_examination' => 'nullable|string|max:2000',
-            'vital_signs' => 'nullable|string|max:500',
-            'oral_examination' => 'nullable|string|max:2000',
-            'diagnostic_impression' => 'nullable|string|max:2000',
-            'treatment_plan' => 'nullable|string|max:2000',
-            'recommendations' => 'nullable|string|max:2000',
-            'notes' => 'nullable|string|max:1000',
-            'is_confidential' => 'boolean',
-            'appointment_id' => 'nullable|exists:appointments,id'
-        ]);
-
-        \Log::info('Medical record validation passed');
+        $this->clinicalRecords->context($request);
+        $validated = $request->validated();
 
         try {
             DB::beginTransaction();
 
             $record = MedicalRecord::create([
-                'patient_id' => $request->patient_id,
-                'appointment_id' => $request->appointment_id,
-                'staff_id' => $request->staff_id,
-                'record_type' => $request->record_type,
-                'chief_complaint' => $request->chief_complaint,
-                'present_illness' => $request->present_illness ?? '',
-                'medical_history' => $request->medical_history ?? '',
-                'dental_history' => $request->dental_history ?? '',
-                'family_history' => $request->family_history ?? '',
-                'social_history' => $request->social_history ?? '',
-                'clinical_examination' => $request->clinical_examination,
-                'vital_signs' => $request->vital_signs,
-                'oral_examination' => $request->oral_examination ?? '',
-                'diagnostic_impression' => $request->diagnostic_impression,
-                'treatment_plan' => $request->treatment_plan ?? '',
-                'recommendations' => $request->recommendations ?? '',
-                'notes' => $request->notes,
+                'patient_id' => $validated['patient_id'],
+                'appointment_id' => $validated['appointment_id'] ?? null,
+                'staff_id' => $validated['staff_id'],
+                'record_type' => $validated['record_type'],
+                'chief_complaint' => $validated['chief_complaint'],
+                'present_illness' => $validated['present_illness'] ?? '',
+                'medical_history' => $validated['medical_history'] ?? '',
+                'dental_history' => $validated['dental_history'] ?? '',
+                'family_history' => $validated['family_history'] ?? '',
+                'social_history' => $validated['social_history'] ?? '',
+                'clinical_examination' => $validated['clinical_examination'] ?? '',
+                'vital_signs' => $validated['vital_signs'] ?? null,
+                'oral_examination' => $validated['oral_examination'] ?? '',
+                'diagnostic_impression' => $validated['diagnostic_impression'] ?? '',
+                'treatment_plan' => $validated['treatment_plan'] ?? '',
+                'recommendations' => $validated['recommendations'] ?? '',
+                'notes' => $validated['notes'] ?? null,
                 'is_confidential' => $request->boolean('is_confidential'),
                 'created_by' => Auth::id()
             ]);
 
-            DB::commit();
+            activity()
+                ->performedOn($record)
+                ->causedBy($request->user())
+                ->log('Historia clínica creada');
 
-            \Log::info('Medical record created successfully', ['record_id' => $record->id]);
+            DB::commit();
 
             return redirect()->route('patients.show', $record->patient_id)
                 ->with('success', 'Historia clínica creada exitosamente.');
@@ -143,15 +128,19 @@ class MedicalRecordController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             \Log::error('Error creating medical record', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
-            return back()->with('error', 'Error al crear la historia clínica: ' . $e->getMessage());
+            return back()->with('error', 'Error al crear la historia clínica. Inténtalo de nuevo.')->withInput();
         }
     }
 
     /**
      * Display the specified resource.
      */
-    public function show(MedicalRecord $medicalRecord)
+    public function show(Request $request, MedicalRecord $medicalRecord)
     {
+        $medicalRecord = $this->clinicalRecords->medicalRecord(
+            $medicalRecord,
+            $this->clinicalRecords->context($request),
+        );
         $medicalRecord->load(['patient', 'staff.user', 'appointment', 'diagnoses', 'images']);
         
         return view('medical-records.show', compact('medicalRecord'));
@@ -160,10 +149,12 @@ class MedicalRecordController extends Controller
     /**
      * Show the form for editing the specified resource.
      */
-    public function edit(MedicalRecord $medicalRecord)
+    public function edit(Request $request, MedicalRecord $medicalRecord)
     {
-        $staff = Staff::with('user')->get();
-        $patients = Patient::active()->get();
+        $context = $this->clinicalRecords->context($request);
+        $medicalRecord = $this->clinicalRecords->medicalRecord($medicalRecord, $context);
+        $staff = $this->clinicalRecords->staff($context)->with('user')->active()->get();
+        $patients = $this->clinicalRecords->patients($context)->active()->get();
         
         return view('medical-records.edit', compact('medicalRecord', 'staff', 'patients'));
     }
@@ -171,82 +162,92 @@ class MedicalRecordController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, MedicalRecord $medicalRecord)
+    public function update(MedicalRecordRequest $request, MedicalRecord $medicalRecord)
     {
-        $request->validate([
-            'patient_id' => 'required|exists:patients,id',
-            'staff_id' => 'required|exists:staff,id',
-            'record_type' => 'required|in:consulta,tratamiento,seguimiento,urgencia',
-            'chief_complaint' => 'required|string|max:1000',
-            'present_illness' => 'nullable|string|max:2000',
-            'medical_history' => 'nullable|string|max:2000',
-            'dental_history' => 'nullable|string|max:2000',
-            'family_history' => 'nullable|string|max:2000',
-            'social_history' => 'nullable|string|max:2000',
-            'clinical_examination' => 'nullable|string|max:2000',
-            'vital_signs' => 'nullable|string|max:500',
-            'oral_examination' => 'nullable|string|max:2000',
-            'diagnostic_impression' => 'nullable|string|max:2000',
-            'treatment_plan' => 'nullable|string|max:2000',
-            'recommendations' => 'nullable|string|max:2000',
-            'notes' => 'nullable|string|max:1000',
-            'is_confidential' => 'boolean',
-            'appointment_id' => 'nullable|exists:appointments,id'
-        ]);
+        $medicalRecord = $this->clinicalRecords->medicalRecord($medicalRecord, $request->clinicContext());
+        $validated = $request->validated();
 
         try {
             $medicalRecord->update([
-                'patient_id' => $request->patient_id,
-                'appointment_id' => $request->appointment_id,
-                'staff_id' => $request->staff_id,
-                'record_type' => $request->record_type,
-                'chief_complaint' => $request->chief_complaint,
-                'present_illness' => $request->present_illness,
-                'medical_history' => $request->medical_history,
-                'dental_history' => $request->dental_history,
-                'family_history' => $request->family_history,
-                'social_history' => $request->social_history,
-                'clinical_examination' => $request->clinical_examination,
-                'vital_signs' => $request->vital_signs,
-                'oral_examination' => $request->oral_examination,
-                'diagnostic_impression' => $request->diagnostic_impression,
-                'treatment_plan' => $request->treatment_plan,
-                'recommendations' => $request->recommendations,
-                'notes' => $request->notes,
+                'patient_id' => $validated['patient_id'],
+                'appointment_id' => $validated['appointment_id'] ?? null,
+                'staff_id' => $validated['staff_id'],
+                'record_type' => $validated['record_type'],
+                'chief_complaint' => $validated['chief_complaint'],
+                'present_illness' => $validated['present_illness'] ?? '',
+                'medical_history' => $validated['medical_history'] ?? '',
+                'dental_history' => $validated['dental_history'] ?? '',
+                'family_history' => $validated['family_history'] ?? '',
+                'social_history' => $validated['social_history'] ?? '',
+                'clinical_examination' => $validated['clinical_examination'] ?? '',
+                'vital_signs' => $validated['vital_signs'] ?? null,
+                'oral_examination' => $validated['oral_examination'] ?? '',
+                'diagnostic_impression' => $validated['diagnostic_impression'] ?? '',
+                'treatment_plan' => $validated['treatment_plan'] ?? '',
+                'recommendations' => $validated['recommendations'] ?? '',
+                'notes' => $validated['notes'] ?? null,
                 'is_confidential' => $request->boolean('is_confidential')
             ]);
+
+            activity()
+                ->performedOn($medicalRecord)
+                ->causedBy($request->user())
+                ->log('Historia clínica actualizada');
 
             return redirect()->route('patients.show', $medicalRecord->patient_id)
                 ->with('success', 'Historia clínica actualizada exitosamente.');
 
         } catch (\Exception $e) {
-            return back()->with('error', 'Error al actualizar la historia clínica: ' . $e->getMessage());
+            \Log::error('Error updating medical record', [
+                'record_id' => $medicalRecord->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return back()->with('error', 'Error al actualizar la historia clínica. Inténtalo de nuevo.')->withInput();
         }
     }
 
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(MedicalRecord $medicalRecord)
+    public function destroy(Request $request, MedicalRecord $medicalRecord)
     {
+        $medicalRecord = $this->clinicalRecords->medicalRecord(
+            $medicalRecord,
+            $this->clinicalRecords->context($request),
+        );
         try {
             $patientId = $medicalRecord->patient_id;
+
+            activity()
+                ->performedOn($medicalRecord)
+                ->causedBy($request->user())
+                ->log('Historia clínica eliminada');
+
             $medicalRecord->delete();
 
             return redirect()->route('patients.show', $patientId)
                 ->with('success', 'Historia clínica eliminada exitosamente.');
 
         } catch (\Exception $e) {
-            return back()->with('error', 'Error al eliminar la historia clínica: ' . $e->getMessage());
+            \Log::error('Error deleting medical record', [
+                'record_id' => $medicalRecord->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return back()->with('error', 'Error al eliminar la historia clínica. Inténtalo de nuevo.');
         }
     }
 
     /**
      * Obtener historias clínicas de un paciente específico
      */
-    public function getPatientRecords(Patient $patient)
+    public function getPatientRecords(Request $request, Patient $patient)
     {
-        $records = $patient->medicalRecords()
+        $context = $this->clinicalRecords->context($request);
+        $patient = $this->clinicalRecords->patients($context)->findOrFail($patient->getKey());
+        $records = $this->clinicalRecords->medicalRecords($context)
+            ->where('patient_id', $patient->id)
             ->with(['staff.user', 'appointment'])
             ->orderBy('created_at', 'desc')
             ->get();
@@ -257,9 +258,16 @@ class MedicalRecordController extends Controller
     /**
      * Exportar historia clínica a PDF
      */
-    public function exportPdf(MedicalRecord $medicalRecord)
+    public function exportPdf(Request $request, MedicalRecord $medicalRecord)
     {
+        $this->clinicalRecords->medicalRecord(
+            $medicalRecord,
+            $this->clinicalRecords->context($request),
+        );
+
         // Implementar exportación a PDF
         // return PDF::loadView('medical-records.pdf', compact('medicalRecord'))->download();
+
+        abort(501, 'La exportación todavía no está disponible.');
     }
 }

@@ -31,6 +31,10 @@ return [
         'cancel_appointments' => 'Cancelar citas',
         'reschedule_appointments' => 'Reprogramar citas',
 
+        // Gestión de Historias Clínicas
+        'view_medical_records' => 'Ver historias clínicas',
+        'manage_medical_records' => 'Gestionar historias clínicas',
+
         // Gestión de Staff
         'view_staff' => 'Ver personal',
         'manage_staff' => 'Gestionar personal',

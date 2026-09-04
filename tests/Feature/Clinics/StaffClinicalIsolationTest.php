@@ -40,6 +40,12 @@ class StaffClinicalIsolationTest extends TestCase
             return in_array($local->id, $ids, true)
                 && ! in_array($foreign->id, $ids, true);
         });
+
+        $this->actingAs($operator)
+            ->withSession(['clinic_id' => $clinicA->id])
+            ->get(route('staff.index'))
+            ->assertOk()
+            ->assertSee('Gestión de Personal');
     }
 
     public function test_direct_operations_are_denied_for_staff_from_another_clinic(): void

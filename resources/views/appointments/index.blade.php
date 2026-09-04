@@ -292,15 +292,15 @@
 @endsection
 
 @php
-function getSortUrl($field, $currentSort, $currentDirection) {
+$getAppointmentSortUrl = static function ($field, $currentSort, $currentDirection) {
     $direction = ($currentSort === $field && $currentDirection === 'asc') ? 'desc' : 'asc';
     $params = request()->query();
     $params['sort'] = $field;
     $params['direction'] = $direction;
     return request()->url() . '?' . http_build_query($params);
-}
+};
 
-function getSortIcon($field, $currentSort, $currentDirection) {
+$getAppointmentSortIcon = static function ($field, $currentSort, $currentDirection) {
     if ($currentSort !== $field) {
         return '<i class="fas fa-sort sort-icon"></i>';
     }
@@ -309,14 +309,7 @@ function getSortIcon($field, $currentSort, $currentDirection) {
     } else {
         return '<i class="fas fa-sort-down sort-icon active"></i>';
     }
-}
-
-function getSortClass($field, $currentSort, $currentDirection) {
-    if ($currentSort === $field) {
-        return 'text-primary';
-    }
-    return '';
-}
+};
 @endphp
 
 @section('content')
@@ -509,39 +502,39 @@ function getSortClass($field, $currentSort, $currentDirection) {
                             <thead>
                                 <tr>
                                     <th>
-                                        <a href="{{ getSortUrl('id', $sortField ?? '', $sortDirection ?? '') }}">
+                                        <a href="{{ $getAppointmentSortUrl('id', $sortField ?? '', $sortDirection ?? '') }}">
                                             Código
-                                            {!! getSortIcon('id', $sortField ?? '', $sortDirection ?? '') !!}
+                                            {!! $getAppointmentSortIcon('id', $sortField ?? '', $sortDirection ?? '') !!}
                                         </a>
                                     </th>
                                     <th>
-                                        <a href="{{ getSortUrl('patient_name', $sortField ?? '', $sortDirection ?? '') }}">
+                                        <a href="{{ $getAppointmentSortUrl('patient_name', $sortField ?? '', $sortDirection ?? '') }}">
                                             Paciente
-                                            {!! getSortIcon('patient_name', $sortField ?? '', $sortDirection ?? '') !!}
+                                            {!! $getAppointmentSortIcon('patient_name', $sortField ?? '', $sortDirection ?? '') !!}
                                         </a>
                                     </th>
                                     <th>
-                                        <a href="{{ getSortUrl('appointment_date', $sortField ?? '', $sortDirection ?? '') }}">
+                                        <a href="{{ $getAppointmentSortUrl('appointment_date', $sortField ?? '', $sortDirection ?? '') }}">
                                             Fecha y Hora
-                                            {!! getSortIcon('appointment_date', $sortField ?? '', $sortDirection ?? '') !!}
+                                            {!! $getAppointmentSortIcon('appointment_date', $sortField ?? '', $sortDirection ?? '') !!}
                                         </a>
                                     </th>
                                     <th>
-                                        <a href="{{ getSortUrl('staff_name', $sortField ?? '', $sortDirection ?? '') }}">
+                                        <a href="{{ $getAppointmentSortUrl('staff_name', $sortField ?? '', $sortDirection ?? '') }}">
                                             Odontólogo
-                                            {!! getSortIcon('staff_name', $sortField ?? '', $sortDirection ?? '') !!}
+                                            {!! $getAppointmentSortIcon('staff_name', $sortField ?? '', $sortDirection ?? '') !!}
                                         </a>
                                     </th>
                                     <th>
-                                        <a href="{{ getSortUrl('type', $sortField ?? '', $sortDirection ?? '') }}">
+                                        <a href="{{ $getAppointmentSortUrl('type', $sortField ?? '', $sortDirection ?? '') }}">
                                             Tipo
-                                            {!! getSortIcon('type', $sortField ?? '', $sortDirection ?? '') !!}
+                                            {!! $getAppointmentSortIcon('type', $sortField ?? '', $sortDirection ?? '') !!}
                                         </a>
                                     </th>
                                     <th>
-                                        <a href="{{ getSortUrl('status', $sortField ?? '', $sortDirection ?? '') }}">
+                                        <a href="{{ $getAppointmentSortUrl('status', $sortField ?? '', $sortDirection ?? '') }}">
                                             Estado
-                                            {!! getSortIcon('status', $sortField ?? '', $sortDirection ?? '') !!}
+                                            {!! $getAppointmentSortIcon('status', $sortField ?? '', $sortDirection ?? '') !!}
                                         </a>
                                     </th>
                                     <th>Acciones</th>

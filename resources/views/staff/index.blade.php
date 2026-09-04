@@ -183,7 +183,7 @@
 @endsection
 
 @php
-function getSortUrl($field, $currentSort, $currentDirection) {
+$getStaffSortUrl = static function ($field, $currentSort, $currentDirection) {
     $params = request()->query();
     
     if ($currentSort === $field && $currentDirection === 'asc') {
@@ -195,9 +195,9 @@ function getSortUrl($field, $currentSort, $currentDirection) {
     $params['sort'] = $field;
     
     return request()->url() . '?' . http_build_query($params);
-}
+};
 
-function getSortIcon($field, $currentSort, $currentDirection) {
+$getStaffSortIcon = static function ($field, $currentSort, $currentDirection) {
     if ($currentSort !== $field) {
         return '<i class="fas fa-sort sort-icon"></i>';
     }
@@ -207,14 +207,7 @@ function getSortIcon($field, $currentSort, $currentDirection) {
     } else {
         return '<i class="fas fa-sort-down sort-icon active"></i>';
     }
-}
-
-function getSortClass($field, $currentSort, $currentDirection) {
-    if ($currentSort === $field) {
-        return $currentDirection === 'asc' ? 'sort-asc' : 'sort-desc';
-    }
-    return '';
-}
+};
 
 $sortField = request('sort', 'id');
 $sortDirection = request('direction', 'desc');
@@ -412,39 +405,39 @@ $sortDirection = request('direction', 'desc');
                             <thead>
                                 <tr>
                                     <th>
-                                        <a href="{{ getSortUrl('id', $sortField, $sortDirection) }}">
+                                        <a href="{{ $getStaffSortUrl('id', $sortField, $sortDirection) }}">
                                             Código
-                                            {!! getSortIcon('id', $sortField, $sortDirection) !!}
+                                            {!! $getStaffSortIcon('id', $sortField, $sortDirection) !!}
                                         </a>
                                     </th>
                                     <th>
-                                        <a href="{{ getSortUrl('name', $sortField, $sortDirection) }}">
+                                        <a href="{{ $getStaffSortUrl('name', $sortField, $sortDirection) }}">
                                             Personal
-                                            {!! getSortIcon('name', $sortField, $sortDirection) !!}
+                                            {!! $getStaffSortIcon('name', $sortField, $sortDirection) !!}
                                         </a>
                                     </th>
                                     <th>
-                                        <a href="{{ getSortUrl('email', $sortField, $sortDirection) }}">
+                                        <a href="{{ $getStaffSortUrl('email', $sortField, $sortDirection) }}">
                                             Contacto
-                                            {!! getSortIcon('email', $sortField, $sortDirection) !!}
+                                            {!! $getStaffSortIcon('email', $sortField, $sortDirection) !!}
                                         </a>
                                     </th>
                                     <th>
-                                        <a href="{{ getSortUrl('specialty', $sortField, $sortDirection) }}">
+                                        <a href="{{ $getStaffSortUrl('specialty', $sortField, $sortDirection) }}">
                                             Especialidad
-                                            {!! getSortIcon('specialty', $sortField, $sortDirection) !!}
+                                            {!! $getStaffSortIcon('specialty', $sortField, $sortDirection) !!}
                                         </a>
                                     </th>
                                     <th>
-                                        <a href="{{ getSortUrl('role', $sortField, $sortDirection) }}">
+                                        <a href="{{ $getStaffSortUrl('role', $sortField, $sortDirection) }}">
                                             Rol
-                                            {!! getSortIcon('role', $sortField, $sortDirection) !!}
+                                            {!! $getStaffSortIcon('role', $sortField, $sortDirection) !!}
                                         </a>
                                     </th>
                                     <th>
-                                        <a href="{{ getSortUrl('is_active', $sortField, $sortDirection) }}">
+                                        <a href="{{ $getStaffSortUrl('is_active', $sortField, $sortDirection) }}">
                                             Estado
-                                            {!! getSortIcon('is_active', $sortField, $sortDirection) !!}
+                                            {!! $getStaffSortIcon('is_active', $sortField, $sortDirection) !!}
                                         </a>
                                     </th>
                                     <th>Acciones</th>

@@ -2,19 +2,19 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Clinics\AppointmentRequest;
 use App\Models\Appointment;
 use App\Models\AppointmentStatus;
-use App\Models\Patient;
-use App\Models\Staff;
+use App\Modules\Clinics\Services\ClinicalRelatedRecordAccessService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
 
 class AppointmentController extends Controller
 {
-    public function __construct()
-    {
-        // Middleware se aplica en las rutas, no en el constructor
+    public function __construct(
+        private readonly ClinicalRelatedRecordAccessService $clinicalRecords,
+    ) {
     }
 
     /**
@@ -22,22 +22,9 @@ class AppointmentController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Appointment::with(['patient', 'staff.user', 'status', 'creator']);
-
-        // Filtrar citas según el rol del usuario
-        $userRole = $this->getUserRole(auth()->user());
-        
-        if ($userRole === 'doctor') {
-            // Doctor solo puede ver sus propias citas
-            $staffId = auth()->user()->staff->id ?? null;
-            
-            if ($staffId) {
-                $query->where('staff_id', $staffId);
-            } else {
-                // Si no tiene staff asociado, no mostrar citas
-                $query->where('id', 0);
-            }
-        }
+        $context = $this->clinicalRecords->context($request);
+        $query = $this->clinicalRecords->appointments($context)
+            ->with(['patient', 'staff.user', 'status', 'creator']);
 
         // Sorting
         $sortField = $request->get('sort', 'appointment_date');
@@ -135,7 +122,10 @@ class AppointmentController extends Controller
         }
 
         // Datos para filtros
-        $staffMembers = Staff::with('user')->active()->get();
+        $staffMembers = $this->clinicalRecords->staff($context)
+            ->with('user')
+            ->active()
+            ->get();
         $statuses = AppointmentStatus::active()->get();
 
         return view('appointments.index', compact('appointments', 'staffMembers', 'statuses', 'perPage', 'sortField', 'sortDirection'));
@@ -144,14 +134,17 @@ class AppointmentController extends Controller
     /**
      * Show the form for creating a new resource.
      */
-    public function create()
+    public function create(Request $request)
     {
-        $patients = Patient::select('id', 'first_name', 'last_name', 'patient_code', 'gender')
+        $context = $this->clinicalRecords->context($request);
+        $patients = $this->clinicalRecords->patients($context)
+            ->select('id', 'first_name', 'last_name', 'patient_code', 'gender')
             ->where('is_active', true)
             ->orderBy('last_name')
             ->get();
         
-        $staff = Staff::with('user')
+        $staff = $this->clinicalRecords->staff($context)
+            ->with('user')
             ->where('is_active', true)
             ->get();
         
@@ -163,58 +156,31 @@ class AppointmentController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
+    public function store(AppointmentRequest $request)
     {
-        \Log::info('=== STORE METHOD CALLED ===', ['request_data' => $request->all()]);
-        
-        $request->validate([
-            'patient_id' => 'required|exists:patients,id',
-            'staff_id' => 'required|exists:staff,id',
-            'appointment_status_id' => 'required|exists:appointment_statuses,id',
-            'appointment_date' => 'required|date|after_or_equal:today',
-            'start_time' => 'required|date_format:H:i',
-            'duration' => 'required|integer|min:15|max:480',
-            'type' => 'required|string|max:255',
-            'reason' => 'nullable|string',
-            'notes' => 'nullable|string',
-            'treatment_plan' => 'nullable|string',
-            'estimated_cost' => 'nullable|numeric|min:0',
-            'is_urgent' => 'boolean',
-            'is_follow_up' => 'boolean',
-            'is_recurring' => 'boolean',
-            'reminder_sent' => 'boolean',
-        ], [
-            'patient_id.required' => 'El paciente es obligatorio.',
-            'staff_id.required' => 'El doctor/asistente es obligatorio.',
-            'appointment_status_id.required' => 'El estado es obligatorio.',
-            'appointment_date.required' => 'La fecha es obligatoria.',
-            'start_time.required' => 'La hora de inicio es obligatoria.',
-            'duration.required' => 'La duración es obligatoria.',
-            'type.required' => 'El tipo de cita es obligatorio.',
-        ]);
-
-        \Log::info('Validation passed');
+        $this->clinicalRecords->context($request);
+        $validated = $request->validated();
 
         try {
-            $startTime = Carbon::parse($request->appointment_date . ' ' . $request->start_time);
-            $endTime = $startTime->copy()->addMinutes((int)$request->duration);
+            $startTime = Carbon::parse($validated['appointment_date'].' '.$validated['start_time']);
+            $endTime = $startTime->copy()->addMinutes((int) $validated['duration']);
 
             $appointmentCode = 'CIT-' . strtoupper(Str::random(8));
 
             $appointment = Appointment::create([
                 'appointment_code' => $appointmentCode,
-                'patient_id' => $request->patient_id,
-                'staff_id' => $request->staff_id,
-                'appointment_status_id' => $request->appointment_status_id,
-                'appointment_date' => $request->appointment_date,
-                'start_time' => $request->start_time,
+                'patient_id' => $validated['patient_id'],
+                'staff_id' => $validated['staff_id'],
+                'appointment_status_id' => $validated['appointment_status_id'],
+                'appointment_date' => $validated['appointment_date'],
+                'start_time' => $validated['start_time'],
                 'end_time' => $endTime->format('H:i:s'),
-                'duration' => (int)$request->duration,
-                'type' => $request->type,
-                'reason' => $request->reason,
-                'notes' => $request->notes,
-                'treatment_plan' => $request->treatment_plan,
-                'estimated_cost' => $request->estimated_cost,
+                'duration' => (int) $validated['duration'],
+                'type' => $validated['type'],
+                'reason' => $validated['reason'] ?? null,
+                'notes' => $validated['notes'] ?? null,
+                'treatment_plan' => $validated['treatment_plan'] ?? null,
+                'estimated_cost' => $validated['estimated_cost'] ?? null,
                 'is_urgent' => $request->boolean('is_urgent'),
                 'is_follow_up' => $request->boolean('is_follow_up'),
                 'is_recurring' => $request->boolean('is_recurring'),
@@ -227,15 +193,13 @@ class AppointmentController extends Controller
                 ->causedBy(auth()->user())
                 ->log('Cita creada');
 
-            \Log::info('Appointment created successfully');
-
             return redirect()->route('appointments.show', $appointment)
                 ->with('success', 'Cita creada exitosamente.');
 
         } catch (\Exception $e) {
             \Log::error('Error creating appointment', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
             return back()->withErrors([
-                'error' => 'Ocurrió un error al crear la cita: ' . $e->getMessage(),
+                'error' => 'Ocurrió un error al crear la cita. Inténtalo de nuevo.',
             ])->withInput();
         }
     }
@@ -243,8 +207,12 @@ class AppointmentController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(Appointment $appointment)
+    public function show(Request $request, Appointment $appointment)
     {
+        $appointment = $this->clinicalRecords->appointment(
+            $appointment,
+            $this->clinicalRecords->context($request),
+        );
         $appointment->load([
             'patient',
             'staff.user',
@@ -259,10 +227,18 @@ class AppointmentController extends Controller
     /**
      * Show the form for editing the specified resource.
      */
-    public function edit(Appointment $appointment)
+    public function edit(Request $request, Appointment $appointment)
     {
-        $patients = Patient::active()->orderBy('first_name')->get(['id', 'patient_code', 'first_name', 'last_name']);
-        $staffMembers = Staff::with('user')->active()->get();
+        $context = $this->clinicalRecords->context($request);
+        $appointment = $this->clinicalRecords->appointment($appointment, $context);
+        $patients = $this->clinicalRecords->patients($context)
+            ->active()
+            ->orderBy('first_name')
+            ->get(['id', 'patient_code', 'first_name', 'last_name']);
+        $staffMembers = $this->clinicalRecords->staff($context)
+            ->with('user')
+            ->active()
+            ->get();
         $statuses = AppointmentStatus::active()->get();
 
         return view('appointments.edit', compact('appointment', 'patients', 'staffMembers', 'statuses'));
@@ -271,51 +247,28 @@ class AppointmentController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, Appointment $appointment)
+    public function update(AppointmentRequest $request, Appointment $appointment)
     {
-        $request->validate([
-            'patient_id' => 'required|exists:patients,id',
-            'staff_id' => 'required|exists:staff,id',
-            'appointment_status_id' => 'required|exists:appointment_statuses,id',
-            'appointment_date' => 'required|date',
-            'start_time' => 'required|date_format:H:i',
-            'duration' => 'required|integer|min:15|max:480',
-            'type' => 'required|string|max:255',
-            'reason' => 'nullable|string',
-            'notes' => 'nullable|string',
-            'treatment_plan' => 'nullable|string',
-            'estimated_cost' => 'nullable|numeric|min:0',
-            'is_urgent' => 'boolean',
-            'is_follow_up' => 'boolean',
-            'is_recurring' => 'boolean',
-            'reminder_sent' => 'boolean',
-        ], [
-            'patient_id.required' => 'El paciente es obligatorio.',
-            'staff_id.required' => 'El doctor/asistente es obligatorio.',
-            'appointment_status_id.required' => 'El estado es obligatorio.',
-            'appointment_date.required' => 'La fecha es obligatoria.',
-            'start_time.required' => 'La hora de inicio es obligatoria.',
-            'duration.required' => 'La duración es obligatoria.',
-            'type.required' => 'El tipo de cita es obligatorio.',
-        ]);
+        $appointment = $this->clinicalRecords->appointment($appointment, $request->clinicContext());
+        $validated = $request->validated();
 
         try {
-            $startTime = Carbon::parse($request->appointment_date . ' ' . $request->start_time);
-            $endTime = $startTime->copy()->addMinutes((int)$request->duration);
+            $startTime = Carbon::parse($validated['appointment_date'].' '.$validated['start_time']);
+            $endTime = $startTime->copy()->addMinutes((int) $validated['duration']);
 
             $appointment->update([
-                'patient_id' => $request->patient_id,
-                'staff_id' => $request->staff_id,
-                'appointment_status_id' => $request->appointment_status_id,
-                'appointment_date' => $request->appointment_date,
-                'start_time' => $request->start_time,
+                'patient_id' => $validated['patient_id'],
+                'staff_id' => $validated['staff_id'],
+                'appointment_status_id' => $validated['appointment_status_id'],
+                'appointment_date' => $validated['appointment_date'],
+                'start_time' => $validated['start_time'],
                 'end_time' => $endTime->format('H:i:s'),
-                'duration' => (int)$request->duration,
-                'type' => $request->type,
-                'reason' => $request->reason,
-                'notes' => $request->notes,
-                'treatment_plan' => $request->treatment_plan,
-                'estimated_cost' => $request->estimated_cost,
+                'duration' => (int) $validated['duration'],
+                'type' => $validated['type'],
+                'reason' => $validated['reason'] ?? null,
+                'notes' => $validated['notes'] ?? null,
+                'treatment_plan' => $validated['treatment_plan'] ?? null,
+                'estimated_cost' => $validated['estimated_cost'] ?? null,
                 'is_urgent' => $request->boolean('is_urgent'),
                 'is_follow_up' => $request->boolean('is_follow_up'),
                 'is_recurring' => $request->boolean('is_recurring'),
@@ -342,6 +295,10 @@ class AppointmentController extends Controller
      */
     public function updateStatus(Request $request, Appointment $appointment)
     {
+        $appointment = $this->clinicalRecords->appointment(
+            $appointment,
+            $this->clinicalRecords->context($request),
+        );
         $request->validate([
             'status_id' => 'required|exists:appointment_statuses,id'
         ]);
@@ -361,16 +318,7 @@ class AppointmentController extends Controller
                 ], 400);
             }
 
-            // 2. VALIDAR PERMISOS DE USUARIO
-            if (!$this->canUserChangeStatus(auth()->user(), $appointment, $newStatusName)) {
-                $this->logStatusChangeAttempt($appointment, $currentStatus, $newStatusName, false, 'Sin permisos');
-                return response()->json([
-                    'success' => false,
-                    'message' => 'No tienes permisos para realizar este cambio'
-                ], 403);
-            }
-
-            // 3. VALIDACIONES ADICIONALES
+            // 2. VALIDACIONES ADICIONALES
             $additionalValidation = $this->performAdditionalValidations($appointment, $newStatusName);
             if (!$additionalValidation['valid']) {
                 $this->logStatusChangeAttempt($appointment, $currentStatus, $newStatusName, false, $additionalValidation['reason']);
@@ -380,7 +328,7 @@ class AppointmentController extends Controller
                 ], 400);
             }
 
-            // 4. ACTUALIZAR ESTADO
+            // 3. ACTUALIZAR ESTADO
             $oldStatus = $appointment->status->display_name ?? 'Sin estado';
             $appointment->update([
                 'appointment_status_id' => $request->status_id
@@ -389,13 +337,13 @@ class AppointmentController extends Controller
             $appointment->load('status');
             $newStatusDisplay = $appointment->status->display_name ?? 'Sin estado';
 
-            // 5. LOGGING COMPLETO
+            // 4. LOGGING COMPLETO
             $this->logStatusChangeAttempt($appointment, $currentStatus, $newStatusName, true, 'Cambio exitoso');
             
-            // 6. ENVIAR NOTIFICACIONES
+            // 5. ENVIAR NOTIFICACIONES
             $this->sendStatusNotifications($appointment, $oldStatus, $newStatusDisplay, $newStatusName);
 
-            // 7. ACTIVITY LOG
+            // 6. ACTIVITY LOG
             activity()
                 ->performedOn($appointment)
                 ->causedBy(auth()->user())
@@ -404,7 +352,7 @@ class AppointmentController extends Controller
                     'new_status' => $newStatusName,
                     'patient_id' => $appointment->patient_id,
                     'staff_id' => $appointment->staff_id,
-                    'user_role' => $this->getUserRole(auth()->user())
+                    'authorization_scope' => 'clinic_membership'
                 ])
                 ->log("Estado de cita cambiado de '{$oldStatus}' a '{$newStatusDisplay}'");
 
@@ -551,70 +499,12 @@ class AppointmentController extends Controller
     }
 
     /**
-     * PERMISOS POR ROL
-     */
-    private function getRolePermissions()
-    {
-        return [
-            'admin' => ['all'], // Puede hacer todo
-            'doctor' => ['own_appointments'], // Solo sus citas
-            'nurse' => ['all'], // Todos los estados
-            'receptionist' => ['scheduled_to_confirmed', 'scheduled_to_cancelled', 'scheduled_to_rescheduled', 'scheduled_to_no_show'],
-            'assistant' => ['scheduled', 'confirmed', 'in_progress', 'completed', 'emergency_cancel']
-        ];
-    }
-
-    /**
      * Validar si se puede hacer la transición de estado
      */
     private function canTransitionTo($currentStatus, $newStatus)
     {
-        // Admin puede hacer cualquier transición
-        if ($this->getUserRole(auth()->user()) === 'admin') {
-            return true;
-        }
-        
         $rules = $this->getTransitionRules();
         return in_array($newStatus, $rules[$currentStatus] ?? []);
-    }
-
-    /**
-     * Validar permisos del usuario para cambiar estado
-     */
-    private function canUserChangeStatus($user, $appointment, $newStatus)
-    {
-        $userRole = $this->getUserRole($user);
-        $permissions = $this->getRolePermissions()[$userRole] ?? [];
-
-        // Admin puede hacer todo
-        if (in_array('all', $permissions)) {
-            return true;
-        }
-
-        // Doctor solo puede cambiar sus propias citas
-        if (in_array('own_appointments', $permissions)) {
-            return $appointment->staff_id === $user->staff->id ?? false;
-        }
-
-        // Recepcionista: solo ciertos cambios
-        if (in_array('scheduled_to_confirmed', $permissions)) {
-            $allowedTransitions = [
-                'scheduled_to_confirmed',
-                'scheduled_to_cancelled', 
-                'scheduled_to_rescheduled',
-                'scheduled_to_no_show'
-            ];
-            return in_array("{$appointment->status->name}_to_{$newStatus}", $allowedTransitions);
-        }
-
-        // Asistente: estados específicos + emergencias
-        if (in_array('emergency_cancel', $permissions)) {
-            $allowedStates = ['scheduled', 'confirmed', 'in_progress', 'completed'];
-            return in_array($newStatus, $allowedStates) || 
-                   ($newStatus === 'cancelled' && $this->isEmergency($appointment));
-        }
-
-        return false;
     }
 
     /**
@@ -622,20 +512,14 @@ class AppointmentController extends Controller
      */
     private function performAdditionalValidations($appointment, $newStatus)
     {
-        // Admin puede saltarse todas las validaciones
-        if ($this->getUserRole(auth()->user()) === 'admin') {
-            return ['valid' => true, 'reason' => 'Validación de admin - permisos completos'];
-        }
-
         // No completar citas futuras
         if ($newStatus === 'completed' && $appointment->appointment_date > now()->toDateString()) {
             return ['valid' => false, 'reason' => 'No se puede completar una cita futura'];
         }
 
-        // No cancelar citas ya completadas (excepto admin)
-        if ($newStatus === 'cancelled' && $appointment->status->name === 'completed' && 
-            $this->getUserRole(auth()->user()) !== 'admin') {
-            return ['valid' => false, 'reason' => 'Solo un administrador puede cancelar una cita completada'];
+        // No cancelar citas ya completadas.
+        if ($newStatus === 'cancelled' && $appointment->status->name === 'completed') {
+            return ['valid' => false, 'reason' => 'No se puede cancelar una cita completada'];
         }
 
         // Validar que el doctor esté disponible para la cita
@@ -656,7 +540,7 @@ class AppointmentController extends Controller
             'patient_id' => $appointment->patient_id,
             'staff_id' => $appointment->staff_id,
             'user_id' => auth()->id(),
-            'user_role' => $this->getUserRole(auth()->user()),
+            'user_role' => 'clinic_membership',
             'current_status' => $currentStatus,
             'new_status' => $newStatus,
             'success' => $success,
@@ -700,61 +584,6 @@ class AppointmentController extends Controller
     }
 
     /**
-     * Obtener rol del usuario
-     */
-    private function getUserRole($user)
-    {
-        // Verificar que el usuario no sea null
-        if (!$user) {
-            \Log::warning('getUserRole called with null user');
-            return 'assistant'; // Por defecto
-        }
-        
-        // Admin siempre es admin, independientemente de su especialidad
-        if ($user->email === 'admin@dentaris.com') {
-            return 'admin';
-        }
-        
-        if ($user->staff && $user->staff->specialty) {
-            $specialty = strtolower($user->staff->specialty);
-            
-            // Detectar doctores/odontólogos
-            if (str_contains($specialty, 'doctor') || 
-                str_contains($specialty, 'dentista') ||
-                str_contains($specialty, 'odontolog') ||
-                str_contains($specialty, 'ortodoncia') ||
-                str_contains($specialty, 'endodoncia') ||
-                str_contains($specialty, 'cirugia') ||
-                str_contains($specialty, 'periodoncia') ||
-                str_contains($specialty, 'prostodoncia') ||
-                str_contains($specialty, 'protesis') ||
-                str_contains($specialty, 'pediatria') ||
-                str_contains($specialty, 'odontopediatria') ||
-                str_contains($specialty, 'odontopediatría') ||
-                str_contains($specialty, 'oral') ||
-                str_contains($specialty, 'dental')) {
-                return 'doctor';
-            }
-            
-            // Detectar enfermeras
-            if (str_contains($specialty, 'nurse') || 
-                str_contains($specialty, 'enfermera')) {
-                return 'nurse';
-            }
-            
-            // Detectar recepcionistas
-            if (str_contains($specialty, 'receptionist') || 
-                str_contains($specialty, 'recepcionista')) {
-                return 'receptionist';
-            }
-            
-            return 'assistant';
-        }
-        
-        return 'assistant'; // Default
-    }
-
-    /**
      * Obtener nombre de display del estado
      */
     private function getStatusDisplayName($status)
@@ -774,16 +603,6 @@ class AppointmentController extends Controller
     }
 
     /**
-     * Verificar si es una emergencia
-     */
-    private function isEmergency($appointment)
-    {
-        return $appointment->is_urgent || 
-               str_contains(strtolower($appointment->type ?? ''), 'emergencia') ||
-               str_contains(strtolower($appointment->reason ?? ''), 'emergencia');
-    }
-
-    /**
      * Verificar si el staff está disponible
      */
     private function isStaffAvailable($appointment)
@@ -797,8 +616,12 @@ class AppointmentController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Appointment $appointment)
+    public function destroy(Request $request, Appointment $appointment)
     {
+        $appointment = $this->clinicalRecords->appointment(
+            $appointment,
+            $this->clinicalRecords->context($request),
+        );
         try {
             activity()
                 ->performedOn($appointment)
@@ -820,8 +643,12 @@ class AppointmentController extends Controller
     /**
      * Confirmar cita
      */
-    public function confirm(Appointment $appointment)
+    public function confirm(Request $request, Appointment $appointment)
     {
+        $appointment = $this->clinicalRecords->appointment(
+            $appointment,
+            $this->clinicalRecords->context($request),
+        );
         try {
             $appointment->update(['confirmed_at' => now()]);
 
@@ -842,6 +669,10 @@ class AppointmentController extends Controller
      */
     public function cancel(Request $request, Appointment $appointment)
     {
+        $appointment = $this->clinicalRecords->appointment(
+            $appointment,
+            $this->clinicalRecords->context($request),
+        );
         $request->validate([
             'cancellation_reason' => 'required|string|max:500',
         ], [
@@ -871,25 +702,14 @@ class AppointmentController extends Controller
      */
     public function weekly(Request $request)
     {
+        $context = $this->clinicalRecords->context($request);
         $date = $request->get('date', now()->format('Y-m-d'));
         $startOfWeek = Carbon::parse($date)->startOfWeek();
         $endOfWeek = Carbon::parse($date)->endOfWeek();
         
-        $query = Appointment::with(['patient', 'staff.user', 'status'])
+        $query = $this->clinicalRecords->appointments($context)
+            ->with(['patient', 'staff.user', 'status'])
             ->whereBetween('appointment_date', [$startOfWeek, $endOfWeek]);
-
-        // Filtrar citas según el rol del usuario
-        $userRole = $this->getUserRole(auth()->user());
-        if ($userRole === 'doctor') {
-            // Doctor solo puede ver sus propias citas
-            $staffId = auth()->user()->staff->id ?? null;
-            if ($staffId) {
-                $query->where('staff_id', $staffId);
-            } else {
-                // Si no tiene staff asociado, no mostrar citas
-                $query->where('id', 0);
-            }
-        }
         
         $appointments = $query->orderBy('appointment_date')
             ->orderBy('start_time')
@@ -919,27 +739,16 @@ class AppointmentController extends Controller
      */
     public function monthly(Request $request)
     {
+        $context = $this->clinicalRecords->context($request);
         $date = $request->get('date', now()->format('Y-m'));
         $startOfMonth = Carbon::parse($date)->startOfMonth();
         $endOfMonth = Carbon::parse($date)->endOfMonth();
         $startOfCalendar = $startOfMonth->copy()->startOfWeek();
         $endOfCalendar = $endOfMonth->copy()->endOfWeek();
         
-        $query = Appointment::with(['patient', 'staff.user', 'status'])
+        $query = $this->clinicalRecords->appointments($context)
+            ->with(['patient', 'staff.user', 'status'])
             ->whereBetween('appointment_date', [$startOfCalendar, $endOfCalendar]);
-
-        // Filtrar citas según el rol del usuario
-        $userRole = $this->getUserRole(auth()->user());
-        if ($userRole === 'doctor') {
-            // Doctor solo puede ver sus propias citas
-            $staffId = auth()->user()->staff->id ?? null;
-            if ($staffId) {
-                $query->where('staff_id', $staffId);
-            } else {
-                // Si no tiene staff asociado, no mostrar citas
-                $query->where('id', 0);
-            }
-        }
         
         $appointments = $query->orderBy('appointment_date')
             ->orderBy('start_time')
@@ -970,25 +779,14 @@ class AppointmentController extends Controller
      */
     public function yearly(Request $request)
     {
+        $context = $this->clinicalRecords->context($request);
         $year = $request->get('year', now()->year);
         $startOfYear = Carbon::create($year, 1, 1);
         $endOfYear = Carbon::create($year, 12, 31);
         
-        $query = Appointment::with(['patient', 'staff.user', 'status'])
+        $query = $this->clinicalRecords->appointments($context)
+            ->with(['patient', 'staff.user', 'status'])
             ->whereBetween('appointment_date', [$startOfYear, $endOfYear]);
-
-        // Filtrar citas según el rol del usuario
-        $userRole = $this->getUserRole(auth()->user());
-        if ($userRole === 'doctor') {
-            // Doctor solo puede ver sus propias citas
-            $staffId = auth()->user()->staff->id ?? null;
-            if ($staffId) {
-                $query->where('staff_id', $staffId);
-            } else {
-                // Si no tiene staff asociado, no mostrar citas
-                $query->where('id', 0);
-            }
-        }
         
         $appointments = $query->get()
             ->groupBy(function($appointment) {
@@ -1015,11 +813,13 @@ class AppointmentController extends Controller
      */
     public function searchStaff(Request $request)
     {
+        $context = $this->clinicalRecords->context($request);
         $search = $request->get('search', '');
         $page = $request->get('page', 1);
         $perPage = 15;
         
-        $query = Staff::with('user')
+        $query = $this->clinicalRecords->staff($context)
+            ->with('user')
             ->where('is_active', true)
             ->where('is_available', true)
             ->where(function($q) use ($search) {
