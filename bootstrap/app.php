@@ -30,6 +30,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'active' => \App\Http\Middleware\EnsureUserIsActive::class,
             'activity' => \App\Http\Middleware\LogUserActivity::class,
             'clinic.context' => \App\Http\Middleware\ResolveClinicContext::class,
+            'clinic.selection' => \App\Http\Middleware\ShareClinicSelection::class,
+            'clinic.domain.ready' => \App\Http\Middleware\EnsureClinicOwnedDomainReady::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

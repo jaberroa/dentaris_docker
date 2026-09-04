@@ -15,6 +15,7 @@ use App\Models\Supplier;
 use App\Repositories\InventoryMovementRepository;
 use App\Repositories\InventoryExportRepository;
 use App\Services\InventoryMovementService;
+use App\Modules\Clinics\Data\ClinicContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -32,7 +33,8 @@ class InventoryController extends Controller
 
     public function index(Request $request)
     {
-        $query = Inventory::with(['product.primarySupplier', 'inventoryLocation']);
+        $context = $this->clinicContext($request);
+        $query = Inventory::forClinic($context)->with(['product.primarySupplier', 'inventoryLocation']);
 
         // Filtros
         if ($request->filled('search')) {
@@ -81,32 +83,42 @@ class InventoryController extends Controller
         $inventories = $query->paginate($perPage)->withQueryString();
 
         // Datos para filtros
-        $categories = Product::select('category')->distinct()->pluck('category');
+        $categories = Product::query()
+            ->whereHas('inventories', fn ($query) => $query->forClinic($context))
+            ->select('category')
+            ->distinct()
+            ->pluck('category');
         $suppliers = Supplier::where('is_active', true)->get();
         $transferDestinationsByProduct = Inventory::query()
+            ->forClinic($context)
             ->with(['product:id,name', 'inventoryLocation:id,name'])
             ->orderBy('product_id')
             ->orderBy('location')
             ->get()
             ->groupBy('product_id');
         $activeInventoryLocations = InventoryLocation::query()
+            ->forClinic($context)
             ->where('is_active', true)
             ->orderBy('name')
             ->get(['id', 'name', 'code']);
-        $exportLocations = InventoryLocation::query()->orderBy('name')->get(['id', 'name', 'code']);
+        $exportLocations = InventoryLocation::query()->forClinic($context)->orderBy('name')->get(['id', 'name', 'code']);
 
         return view('inventory.index', compact('inventories', 'categories', 'suppliers', 'transferDestinationsByProduct', 'activeInventoryLocations', 'exportLocations', 'perPage', 'sortBy', 'sortOrder'));
     }
 
-    public function show(Inventory $inventory)
+    public function show(Request $request, Inventory $inventory)
     {
+        $context = $this->clinicContext($request);
+        $inventory = $this->inventoryForContext($inventory, $context);
         $inventory->load(['product.primarySupplier']);
         $movements = $inventory->movements()
+            ->forClinic($context)
             ->with('user')
             ->latest()
             ->paginate(15);
 
         $reversedMovementIds = InventoryMovement::query()
+            ->forClinic($context)
             ->where('reference_type', InventoryMovement::class)
             ->whereIn('reference_id', $movements->pluck('id'))
             ->pluck('reference_id')
@@ -115,9 +127,10 @@ class InventoryController extends Controller
         return view('inventory.show', compact('inventory', 'movements', 'reversedMovementIds'));
     }
 
-    public function movements(InventoryMovementRepository $movementRepository)
+    public function movements(Request $request, InventoryMovementRepository $movementRepository)
     {
-        $query = $movementRepository->query()->latest();
+        $context = $this->clinicContext($request);
+        $query = $movementRepository->query($context)->latest();
 
         if (request()->filled('type')) {
             $query->where('type', request('type'));
@@ -125,6 +138,7 @@ class InventoryController extends Controller
 
         $movements = $query->paginate(20)->withQueryString();
         $reversedMovementIds = InventoryMovement::query()
+            ->forClinic($context)
             ->where('reference_type', InventoryMovement::class)
             ->whereIn('reference_id', $movements->pluck('id'))
             ->pluck('reference_id')
@@ -135,6 +149,8 @@ class InventoryController extends Controller
 
     public function update(Request $request, Inventory $inventory)
     {
+        $context = $this->clinicContext($request);
+        $inventory = $this->inventoryForContext($inventory, $context);
         $request->validate([
             'current_stock' => 'required|integer|min:0',
             'reserved_stock' => 'required|integer|min:0',
@@ -162,6 +178,9 @@ class InventoryController extends Controller
         InventoryMovementService $movementService,
     )
     {
+        $context = $request->clinicContext();
+        abort_unless($context instanceof ClinicContext, 403, 'El contexto clínico no está disponible.');
+        $inventory = $this->inventoryForContext($inventory, $context);
         $data = $request->validated();
         $movement = $movementService->adjust(
             new InventoryMovementData(
@@ -172,6 +191,7 @@ class InventoryController extends Controller
                 $data['reason'],
             ),
             $request->user(),
+            $context,
         );
 
         if ($request->expectsJson()) {
@@ -184,7 +204,9 @@ class InventoryController extends Controller
 
     public function reverseMovement(InventoryMovement $movement, InventoryMovementService $movementService)
     {
-        $reversal = $movementService->reverse($movement, request()->user());
+        $context = $this->clinicContext(request());
+        $movement = $this->movementForContext($movement, $context);
+        $reversal = $movementService->reverse($movement, request()->user(), $context);
 
         return redirect()->route('inventory.show', $reversal->inventory_id)
             ->with('success', 'Movimiento revertido correctamente.');
@@ -192,6 +214,8 @@ class InventoryController extends Controller
 
     public function transfer(TransferInventoryRequest $request, InventoryMovementService $movementService)
     {
+        $context = $request->clinicContext();
+        abort_unless($context instanceof ClinicContext, 403, 'El contexto clínico no está disponible.');
         $data = $request->validated();
 
         try {
@@ -201,6 +225,7 @@ class InventoryController extends Controller
                 (int) $data['quantity'],
                 $data['reason'],
                 $request->user(),
+                $context,
             );
         } catch (InvalidArgumentException | RuntimeException $exception) {
             throw ValidationException::withMessages(['quantity' => $exception->getMessage()]);
@@ -216,19 +241,21 @@ class InventoryController extends Controller
 
     public function export(ExportInventoryRequest $request, InventoryExportRepository $exportRepository)
     {
+        $context = $request->clinicContext();
+        abort_unless($context instanceof ClinicContext, 403, 'El contexto clínico no está disponible.');
         $filters = $request->validated();
         $limit = $filters['limit'] ?? 10000;
-        $query = $exportRepository->query($filters)->orderBy('id')->limit($limit);
+        $query = $exportRepository->query($filters, $context)->orderBy('id')->limit($limit);
         $rows = (clone $query)->count();
         $format = $filters['format'] ?? 'csv';
 
         activity('inventory')
             ->causedBy($request->user())
-            ->withProperties(['filters' => $filters, 'rows' => $rows, 'format' => $format])
+            ->withProperties(['clinic_id' => $context->clinicId, 'filters' => $filters, 'rows' => $rows, 'format' => $format])
             ->log('inventory.exported');
 
         $filename = 'inventario_'.now()->format('Y-m-d_H-i-s');
-        if ($format === 'xlsx') return Excel::download(new InventoryExport($filters), $filename.'.xlsx');
+        if ($format === 'xlsx') return Excel::download(new InventoryExport($filters, $context), $filename.'.xlsx');
         if ($format === 'pdf') return Pdf::loadView('inventory.export-pdf', ['inventories' => $query->get(), 'filters' => $filters])->setPaper('A4', 'landscape')->download($filename.'.pdf');
 
         return response()->streamDownload(function () use ($query): void {
@@ -251,9 +278,10 @@ class InventoryController extends Controller
         }, $filename.'.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
-    public function lowStock()
+    public function lowStock(Request $request)
     {
-        $lowStockProducts = Inventory::with(['product.primarySupplier'])
+        $context = $this->clinicContext($request);
+        $lowStockProducts = Inventory::forClinic($context)->with(['product.primarySupplier'])
             ->whereHas('product', function($query) {
                 $query->where('is_active', true);
             })
@@ -264,9 +292,10 @@ class InventoryController extends Controller
         return view('inventory.low-stock', compact('lowStockProducts'));
     }
 
-    public function outOfStock()
+    public function outOfStock(Request $request)
     {
-        $outOfStockProducts = Inventory::with(['product.primarySupplier'])
+        $context = $this->clinicContext($request);
+        $outOfStockProducts = Inventory::forClinic($context)->with(['product.primarySupplier'])
             ->whereHas('product', function($query) {
                 $query->where('is_active', true);
             })
@@ -277,9 +306,14 @@ class InventoryController extends Controller
         return view('inventory.out-of-stock', compact('outOfStockProducts'));
     }
 
-    public function expiringSoon()
+    public function expiringSoon(Request $request)
     {
-        $expiringProducts = Product::with(['inventory', 'primarySupplier'])
+        $context = $this->clinicContext($request);
+        $expiringProducts = Product::with([
+                'inventories' => fn ($query) => $query->forClinic($context),
+                'primarySupplier',
+            ])
+            ->whereHas('inventories', fn ($query) => $query->forClinic($context))
             ->where('is_active', true)
             ->where('expiry_date', '<=', now()->addDays(30))
             ->where('expiry_date', '>', now())
@@ -289,22 +323,49 @@ class InventoryController extends Controller
         return view('inventory.expiring-soon', compact('expiringProducts'));
     }
 
-    public function report()
+    public function report(Request $request)
     {
+        $context = $this->clinicContext($request);
         $stats = [
-            'total_products' => Product::where('is_active', true)->count(),
-            'low_stock_count' => Inventory::with('product')
+            'total_products' => Product::where('is_active', true)
+                ->whereHas('inventories', fn ($query) => $query->forClinic($context))
+                ->count(),
+            'low_stock_count' => Inventory::forClinic($context)->with('product')
                 ->whereHas('product', function($query) {
                     $query->where('is_active', true);
                 })
                 ->whereRaw('available_stock <= (SELECT minimum_stock FROM products WHERE products.id = inventory.product_id)')
                 ->count(),
-            'out_of_stock_count' => Inventory::where('available_stock', 0)->count(),
-            'total_value' => Inventory::join('products', 'inventory.product_id', '=', 'products.id')
+            'out_of_stock_count' => Inventory::forClinic($context)->where('available_stock', 0)->count(),
+            'total_value' => Inventory::forClinic($context)->join('products', 'inventory.product_id', '=', 'products.id')
                 ->where('products.is_active', true)
                 ->sum(DB::raw('current_stock * average_cost')),
         ];
 
         return view('inventory.report', compact('stats'));
+    }
+
+    private function clinicContext(Request $request): ClinicContext
+    {
+        $context = $request->attributes->get(ClinicContext::class)
+            ?? $request->attributes->get('clinic.context');
+
+        abort_unless($context instanceof ClinicContext, 403, 'El contexto clínico no está disponible.');
+
+        return $context;
+    }
+
+    private function inventoryForContext(Inventory $inventory, ClinicContext $context): Inventory
+    {
+        abort_unless($inventory->clinic_id !== null && (int) $inventory->clinic_id === $context->clinicId, 404);
+
+        return $inventory;
+    }
+
+    private function movementForContext(InventoryMovement $movement, ClinicContext $context): InventoryMovement
+    {
+        abort_unless($movement->clinic_id !== null && (int) $movement->clinic_id === $context->clinicId, 404);
+
+        return $movement;
     }
 }

@@ -35,6 +35,8 @@
         <!-- Start menu -->
         <div class="d-flex justify-content-between menu-sm px-3 ms-auto">
             <div class="d-flex align-items-center gap-2">
+                <x-clinic-switcher />
+
                 <div class="dropdown d-none d-lg-block">
                     <button type="button" class="btn btn-primary btn-sm fs-14 d-inline" data-bs-toggle="dropdown">
                         Acciones

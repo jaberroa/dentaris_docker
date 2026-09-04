@@ -6,6 +6,7 @@ use App\Data\InventoryMovementData;
 use App\Models\Inventory;
 use App\Models\InventoryMovement;
 use App\Models\User;
+use App\Modules\Clinics\Data\ClinicContext;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
@@ -19,6 +20,7 @@ class InventoryMovementService
         int $quantity,
         string $reason,
         User $actor,
+        ClinicContext $context,
     ): array {
         if ($sourceInventoryId === $destinationInventoryId) {
             throw new InvalidArgumentException('El origen y el destino deben ser inventarios distintos.');
@@ -32,8 +34,9 @@ class InventoryMovementService
             throw new InvalidArgumentException('El motivo de la transferencia es obligatorio.');
         }
 
-        return DB::transaction(function () use ($sourceInventoryId, $destinationInventoryId, $quantity, $reason, $actor): array {
+        return DB::transaction(function () use ($sourceInventoryId, $destinationInventoryId, $quantity, $reason, $actor, $context): array {
             $inventories = Inventory::query()
+                ->forClinic($context)
                 ->whereIn('id', [$sourceInventoryId, $destinationInventoryId])
                 ->orderBy('id')
                 ->lockForUpdate()
@@ -88,6 +91,7 @@ class InventoryMovementService
                     ],
                 ),
                 $actor,
+                $context,
                 $sourceBefore,
                 $sourceAfter,
             );
@@ -108,6 +112,7 @@ class InventoryMovementService
                     ],
                 ),
                 $actor,
+                $context,
                 $destinationBefore,
                 $destinationAfter,
             );
@@ -122,16 +127,17 @@ class InventoryMovementService
         });
     }
 
-    public function reverse(InventoryMovement $movement, User $actor): InventoryMovement
+    public function reverse(InventoryMovement $movement, User $actor, ClinicContext $context): InventoryMovement
     {
-        return DB::transaction(function () use ($movement, $actor): InventoryMovement {
-            $original = InventoryMovement::query()->lockForUpdate()->findOrFail($movement->id);
+        return DB::transaction(function () use ($movement, $actor, $context): InventoryMovement {
+            $original = InventoryMovement::query()->forClinic($context)->lockForUpdate()->findOrFail($movement->id);
 
             if ($original->reference_type === InventoryMovement::class) {
                 throw new InvalidArgumentException('No se puede revertir un movimiento de reversión.');
             }
 
             $alreadyReversed = InventoryMovement::query()
+                ->forClinic($context)
                 ->where('reference_type', InventoryMovement::class)
                 ->where('reference_id', $original->id)
                 ->exists();
@@ -160,11 +166,12 @@ class InventoryMovementService
                     ['reversal_of' => $original->id],
                 ),
                 $actor,
+                $context,
             );
         });
     }
 
-    public function adjust(InventoryMovementData $data, User $actor): InventoryMovement
+    public function adjust(InventoryMovementData $data, User $actor, ClinicContext $context): InventoryMovement
     {
         if ($data->quantity < 1) {
             throw new InvalidArgumentException('La cantidad debe ser mayor que cero.');
@@ -178,8 +185,8 @@ class InventoryMovementService
             throw new InvalidArgumentException('El motivo del movimiento es obligatorio.');
         }
 
-        return DB::transaction(function () use ($data, $actor): InventoryMovement {
-            $inventory = Inventory::query()->lockForUpdate()->findOrFail($data->inventoryId);
+        return DB::transaction(function () use ($data, $actor, $context): InventoryMovement {
+            $inventory = Inventory::query()->forClinic($context)->lockForUpdate()->findOrFail($data->inventoryId);
 
             if ((int) $inventory->product_id !== $data->productId) {
                 throw new InvalidArgumentException('El producto no corresponde al inventario indicado.');
@@ -199,7 +206,7 @@ class InventoryMovementService
                 'available_stock' => max(0, $after - (int) $inventory->reserved_stock),
             ]);
 
-            return $this->recordMovement($inventory, $data, $actor, $before, $after);
+            return $this->recordMovement($inventory, $data, $actor, $context, $before, $after);
         });
     }
 
@@ -207,10 +214,15 @@ class InventoryMovementService
         Inventory $inventory,
         InventoryMovementData $data,
         User $actor,
+        ClinicContext $context,
         int $before,
         int $after,
     ): InventoryMovement {
-        $movement = InventoryMovement::create([
+        if ((int) $inventory->clinic_id !== $context->clinicId) {
+            throw new InvalidArgumentException('El inventario no pertenece a la clínica activa.');
+        }
+
+        $movement = new InventoryMovement([
             'inventory_id' => $inventory->id,
             'product_id' => $data->productId,
             'user_id' => $actor->id,
@@ -225,12 +237,14 @@ class InventoryMovementService
             'reference_id' => $data->referenceId,
             'metadata' => $data->metadata,
         ]);
+        $movement->forceFill(['clinic_id' => $context->clinicId])->save();
 
         activity('inventory')
             ->causedBy($actor)
             ->performedOn($movement)
             ->withProperties([
                 'inventory_id' => $inventory->id,
+                'clinic_id' => $context->clinicId,
                 'product_id' => $data->productId,
                 'type' => $data->type,
                 'quantity' => $data->quantity,

@@ -57,11 +57,11 @@
                         <a href="{{ route('inventory.low-stock') }}" class="btn btn-warning">
                             <i class="fas fa-exclamation-triangle me-1"></i>Stock Bajo
                         </a>
-                        @if(auth()->user()?->hasPermission('manage_inventory'))
+                        @can('viewAny', App\Models\Inventory::class)
                             <a href="{{ route('inventory.locations.index') }}" class="btn btn-outline-info">
                                 <i class="fas fa-map-marker-alt me-1"></i>Ubicaciones
                             </a>
-                        @endif
+                        @endcan
                     </div>
                 </div>
             </div>
@@ -160,9 +160,9 @@
                             <div class="d-flex align-items-center"><label class="per-page-label me-2 mb-0">Mostrar:</label><select class="form-select form-select-sm per-page-selector" style="width: 80px;" onchange="changeInventoryPerPage(this.value)">@foreach([10,25,50,100] as $size)<option value="{{ $size }}" @selected($perPage === $size)>{{ $size }}</option>@endforeach</select></div>
                             <div class="text-muted small"><i class="fas fa-info-circle me-1"></i>Mostrando {{ $inventories->count() }} de {{ $inventories->total() }} productos</div>
                         </div>
-                        @if(auth()->user()?->hasPermission('export_inventory'))
+                        @can('export', App\Models\Inventory::class)
                             <div class="dropdown"><button class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown"><i class="fas fa-download me-1"></i>Exportar</button><div class="dropdown-menu dropdown-menu-end">@foreach(['pdf' => ['fa-file-pdf', 'text-danger', 'PDF'], 'xlsx' => ['fa-file-excel', 'text-success', 'Excel'], 'csv' => ['fa-file-csv', 'text-primary', 'CSV']] as $format => [$icon, $color, $label])<form method="POST" action="{{ route('inventory.export') }}">@csrf<input type="hidden" name="format" value="{{ $format }}"><input type="hidden" name="category" value="{{ request('category') }}"><input type="hidden" name="stock_level" value="{{ request('stock_level') }}"><button class="dropdown-item" type="submit"><i class="fas {{ $icon }} me-2 {{ $color }}"></i>{{ $label }} - filtros actuales</button></form>@endforeach<div class="dropdown-divider"></div>@foreach(['pdf' => ['fa-file-pdf', 'text-danger', 'PDF'], 'xlsx' => ['fa-file-excel', 'text-success', 'Excel'], 'csv' => ['fa-file-csv', 'text-primary', 'CSV']] as $format => [$icon, $color, $label])<form method="POST" action="{{ route('inventory.export') }}">@csrf<input type="hidden" name="format" value="{{ $format }}"><button class="dropdown-item" type="submit"><i class="fas {{ $icon }} me-2 {{ $color }}"></i>{{ $label }} - todos</button></form>@endforeach</div></div>
-                        @endif
+                        @endcan
                     </div>
                 </div>
                 <div class="card-body">
@@ -205,10 +205,12 @@
                                             <a href="{{ route('inventory.show', $inventory) }}" class="btn btn-sm btn-outline-primary" title="Ver inventario" aria-label="Ver inventario">
                                                 <i class="fas fa-eye"></i>
                                             </a>
-                                            <button type="button" class="btn btn-sm btn-outline-warning" title="Ajustar stock" aria-label="Ajustar stock" data-bs-toggle="modal" data-bs-target="#adjustStockModal" data-inventory-id="{{ $inventory->id }}" data-product-id="{{ $inventory->product_id }}" data-product-name="{{ $inventory->product->name ?? 'Producto' }}">
-                                                <i class="fas fa-edit"></i>
-                                            </button>
-                                            @if(auth()->user()?->hasPermission('manage_inventory'))
+                                            @can('adjust', $inventory)
+                                                <button type="button" class="btn btn-sm btn-outline-warning" title="Ajustar stock" aria-label="Ajustar stock" data-bs-toggle="modal" data-bs-target="#adjustStockModal" data-inventory-id="{{ $inventory->id }}" data-product-id="{{ $inventory->product_id }}" data-product-name="{{ $inventory->product->name ?? 'Producto' }}">
+                                                    <i class="fas fa-edit"></i>
+                                                </button>
+                                            @endcan
+                                            @can('update', $inventory)
                                                 <button type="button" class="btn btn-sm btn-outline-secondary" title="Agregar ubicación de stock" aria-label="Agregar ubicación de stock" data-bs-toggle="modal" data-bs-target="#addStockLocationModal" data-inventory-id="{{ $inventory->id }}" data-product-name="{{ $inventory->product->name ?? 'Producto' }}" data-source-location-id="{{ $inventory->inventory_location_id }}">
                                                     <i class="fas fa-map-marker-alt"></i>
                                                 </button>
@@ -229,7 +231,7 @@
                                                 >
                                                     <i class="fas fa-exchange-alt"></i>
                                                 </button>
-                                            @endif
+                                            @endcan
                                         </div>
                                     </td>
                                 </tr>

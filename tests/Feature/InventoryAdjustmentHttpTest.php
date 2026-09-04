@@ -5,24 +5,26 @@ namespace Tests\Feature;
 use App\Http\Requests\Inventory\CreateInventoryAdjustmentRequest;
 use App\Models\Inventory;
 use App\Models\Product;
-use App\Models\Role;
 use App\Models\User;
+use App\Modules\Clinics\Data\ClinicContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Route;
 use Illuminate\Support\Facades\Gate;
+use Tests\Concerns\InteractsWithClinicalContext;
 use Tests\TestCase;
 
 class InventoryAdjustmentHttpTest extends TestCase
 {
     use RefreshDatabase;
+    use InteractsWithClinicalContext;
 
     public function test_user_with_adjust_permission_can_adjust_inventory_over_http(): void
     {
-        [$user, $inventory] = $this->fixture(['adjust_inventory']);
+        [$user, $inventory, $context] = $this->fixture(['adjust_inventory']);
 
-        $this->assertAdjustmentAuthorization($user, $inventory);
+        $this->assertAdjustmentAuthorization($user, $inventory, $context);
 
-        $response = $this->actingAs($user)->postJson(
+        $response = $this->actingAs($user)->withSession(['clinic_id' => $context->clinicId])->postJson(
             route('inventory.adjust', $inventory),
             [
                 'inventory_id' => $inventory->id,
@@ -44,9 +46,9 @@ class InventoryAdjustmentHttpTest extends TestCase
 
     public function test_user_without_adjust_permission_is_rejected(): void
     {
-        [$user, $inventory] = $this->fixture(['manage_inventory']);
+        [$user, $inventory, $context] = $this->fixture(['manage_inventory']);
 
-        $this->actingAs($user)
+        $this->actingAs($user)->withSession(['clinic_id' => $context->clinicId])
             ->postJson(route('inventory.adjust', $inventory), [
                 'inventory_id' => $inventory->id,
                 'product_id' => $inventory->product_id,
@@ -62,11 +64,11 @@ class InventoryAdjustmentHttpTest extends TestCase
 
     public function test_invalid_adjustment_is_rejected_before_persistence(): void
     {
-        [$user, $inventory] = $this->fixture(['adjust_inventory']);
+        [$user, $inventory, $context] = $this->fixture(['adjust_inventory']);
 
-        $this->assertAdjustmentAuthorization($user, $inventory);
+        $this->assertAdjustmentAuthorization($user, $inventory, $context);
 
-        $this->actingAs($user)
+        $this->actingAs($user)->withSession(['clinic_id' => $context->clinicId])
             ->postJson(route('inventory.adjust', $inventory), [
                 'inventory_id' => $inventory->id,
                 'product_id' => $inventory->product_id,
@@ -82,13 +84,8 @@ class InventoryAdjustmentHttpTest extends TestCase
 
     private function fixture(array $permissions): array
     {
-        $user = User::factory()->create();
-        $role = Role::query()->create([
-            'name' => 'test-' . uniqid(),
-            'display_name' => 'Rol de prueba',
-            'permissions' => $permissions,
-        ]);
-        $user->roles()->attach($role);
+        $user = User::factory()->create(['is_active' => true]);
+        $context = $this->clinicalContextFor($user, $permissions);
 
         $product = Product::query()->create([
             'product_code' => 'HTTP-' . uniqid(),
@@ -98,16 +95,17 @@ class InventoryAdjustmentHttpTest extends TestCase
             'minimum_stock' => 1,
             'created_by' => $user->id,
         ]);
-        $inventory = Inventory::query()->create([
+        $inventory = new Inventory([
             'product_id' => $product->id,
             'current_stock' => 0,
             'available_stock' => 0,
         ]);
+        $inventory->forceFill(['clinic_id' => $context->clinicId])->save();
 
-        return [$user, $inventory];
+        return [$user, $inventory, $context];
     }
 
-    private function adjustmentRequestFor(User $user, Inventory $inventory): CreateInventoryAdjustmentRequest
+    private function adjustmentRequestFor(User $user, Inventory $inventory, ClinicContext $context): CreateInventoryAdjustmentRequest
     {
         $request = CreateInventoryAdjustmentRequest::create('/inventory/'.$inventory->id.'/adjust', 'POST');
         $route = new Route('POST', 'inventory/{inventory}', static fn () => null);
@@ -116,13 +114,16 @@ class InventoryAdjustmentHttpTest extends TestCase
 
         $request->setRouteResolver(static fn () => $route);
         $request->setUserResolver(static fn () => $user);
+        $request->attributes->set(ClinicContext::class, $context);
+        $request->attributes->set('clinic.context', $context);
 
         return $request;
     }
 
-    private function assertAdjustmentAuthorization(User $user, Inventory $inventory): void
+    private function assertAdjustmentAuthorization(User $user, Inventory $inventory, ClinicContext $context): void
     {
+        $this->bindClinicalContext($context, $user);
         $this->assertTrue(Gate::forUser($user)->allows('adjust', $inventory));
-        $this->assertTrue($this->adjustmentRequestFor($user, $inventory)->authorize());
+        $this->assertTrue($this->adjustmentRequestFor($user, $inventory, $context)->authorize());
     }
 }

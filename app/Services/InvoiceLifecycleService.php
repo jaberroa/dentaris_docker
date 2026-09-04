@@ -5,17 +5,18 @@ namespace App\Services;
 use App\Models\CdtCatalog;
 use App\Models\Invoice;
 use App\Models\User;
+use App\Modules\Clinics\Data\ClinicContext;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 class InvoiceLifecycleService
 {
-    public function updateDraft(Invoice $invoice, array $data, User $actor): Invoice
+    public function updateDraft(Invoice $invoice, array $data, User $actor, ClinicContext $context): Invoice
     {
-        return DB::transaction(function () use ($invoice, $data, $actor) {
-            $invoice = Invoice::query()->lockForUpdate()->findOrFail($invoice->id);
+        return DB::transaction(function () use ($invoice, $data, $actor, $context) {
+            $invoice = Invoice::query()->forClinic($context)->lockForUpdate()->findOrFail($invoice->id);
 
-            if (! $invoice->isEditable()) {
+            if (! $invoice->isEditable($context)) {
                 throw new InvalidArgumentException('Solo se puede editar una factura en borrador sin pagos registrados.');
             }
 
@@ -48,35 +49,35 @@ class InvoiceLifecycleService
             activity('billing')
                 ->causedBy($actor)
                 ->performedOn($invoice)
-                ->withProperties(['items_count' => count($data['items'])])
+                ->withProperties(['clinic_id' => $context->clinicId, 'items_count' => count($data['items'])])
                 ->log('invoice.updated');
 
             return $invoice->fresh(['items.cdtCatalog']);
         });
     }
 
-    public function send(Invoice $invoice, User $actor): Invoice
+    public function send(Invoice $invoice, User $actor, ClinicContext $context): Invoice
     {
-        return DB::transaction(function () use ($invoice, $actor) {
-            $invoice = Invoice::query()->lockForUpdate()->findOrFail($invoice->id);
+        return DB::transaction(function () use ($invoice, $actor, $context) {
+            $invoice = Invoice::query()->forClinic($context)->lockForUpdate()->findOrFail($invoice->id);
 
             if (! in_array($invoice->status, ['draft', 'sent'], true)) {
                 throw new InvalidArgumentException('Solo se pueden marcar como enviadas las facturas en borrador.');
             }
 
             $invoice->update(['status' => 'sent']);
-            activity('billing')->causedBy($actor)->performedOn($invoice)->log('invoice.sent');
+            activity('billing')->causedBy($actor)->performedOn($invoice)->withProperties(['clinic_id' => $context->clinicId])->log('invoice.sent');
 
             return $invoice;
         });
     }
 
-    public function cancel(Invoice $invoice, User $actor, string $reason): Invoice
+    public function cancel(Invoice $invoice, User $actor, string $reason, ClinicContext $context): Invoice
     {
-        return DB::transaction(function () use ($invoice, $actor, $reason) {
-            $invoice = Invoice::query()->lockForUpdate()->findOrFail($invoice->id);
+        return DB::transaction(function () use ($invoice, $actor, $reason, $context) {
+            $invoice = Invoice::query()->forClinic($context)->lockForUpdate()->findOrFail($invoice->id);
 
-            if ($invoice->payments()->exists()) {
+            if ($invoice->payments()->forClinic($context)->exists()) {
                 throw new InvalidArgumentException('No se puede anular una factura con pagos registrados.');
             }
 
@@ -88,7 +89,7 @@ class InvoiceLifecycleService
             activity('billing')
                 ->causedBy($actor)
                 ->performedOn($invoice)
-                ->withProperties(['reason' => $reason])
+                ->withProperties(['clinic_id' => $context->clinicId, 'reason' => $reason])
                 ->log('invoice.cancelled');
 
             return $invoice;

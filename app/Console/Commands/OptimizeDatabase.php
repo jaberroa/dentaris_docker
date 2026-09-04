@@ -132,11 +132,9 @@ class OptimizeDatabase extends Command
             $this->cacheService->clearAllCache();
             $this->info('✅ Cache limpiado');
 
-            // Reconstruir cache con datos optimizados
-            $this->cacheService->getDashboardKpis();
-            $this->cacheService->getPatientStatistics();
-            $this->cacheService->getInventoryStatistics();
-            $this->info('✅ Cache reconstruido');
+            // Los caches clínicos se reconstruyen bajo demanda porque cada
+            // clave exige un contexto de membresía validado.
+            $this->info('✅ Cache clínico listo para reconstrucción segura bajo demanda');
 
         } catch (\Exception $e) {
             $this->error('❌ Error optimizando cache: ' . $e->getMessage());

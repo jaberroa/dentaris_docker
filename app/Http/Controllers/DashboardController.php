@@ -3,63 +3,63 @@
 namespace App\Http\Controllers;
 
 use App\Models\Patient;
-use App\Models\Appointment;
 use App\Models\Staff;
 use App\Models\Invoice;
 use App\Models\Payment;
-use App\Models\TreatmentPlan;
-use App\Models\LabWork;
 use App\Models\Product;
 use App\Models\Inventory;
-use App\Models\Supplier;
-use App\Models\Purchase;
+use App\Modules\Clinics\Data\ClinicContext;
+use App\Modules\Clinics\Services\ClinicalRelatedRecordAccessService;
+use App\Modules\Clinics\Services\ClinicOwnedDomainReadinessService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class DashboardController extends Controller
 {
-    public function __construct()
-    {
-        // Middleware se aplica en las rutas, no en el constructor
+    public function __construct(
+        private readonly ClinicalRelatedRecordAccessService $clinicalRecords,
+        private readonly ClinicOwnedDomainReadinessService $domainReadiness,
+    ) {
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        $user = auth()->user();
+        $context = $this->clinicalRecords->context($request);
+        $inventoryReady = $this->domainReadiness->isReady('inventory');
+        $billingReady = $this->domainReadiness->isReady('billing');
         
         // KPIs principales
-        $kpis = $this->getMainKPIs();
+        $kpis = $this->getMainKPIs($context, $inventoryReady, $billingReady);
         
         // Estadísticas de citas
-        $appointmentStats = $this->getAppointmentStats();
+        $appointmentStats = $this->getAppointmentStats($context);
         
         // Estadísticas financieras
-        $financialStats = $this->getFinancialStats();
+        $financialStats = $this->getFinancialStats($context, $billingReady);
         
         // Estadísticas de inventario
-        $inventoryStats = $this->getInventoryStats();
+        $inventoryStats = $this->getInventoryStats($context, $inventoryReady);
         
         // Citas del día
-        $todayAppointments = $this->getTodayAppointments();
+        $todayAppointments = $this->getTodayAppointments($context);
         
         // Próximas citas
-        $upcomingAppointments = $this->getUpcomingAppointments();
+        $upcomingAppointments = $this->getUpcomingAppointments($context);
         
         // Alertas y notificaciones
-        $alerts = $this->getAlerts();
+        $alerts = $this->getAlerts($context, $inventoryReady, $billingReady);
         
         // Gráficos de datos
-        $charts = $this->getChartData();
+        $charts = $this->getChartData($context, $inventoryReady, $billingReady);
         
-        // Trabajos de laboratorio pendientes
-        $pendingLabWorks = $this->getPendingLabWorks();
+        // Los módulos aún sin propiedad clínica no se agregan al tablero.
+        $pendingLabWorks = collect();
         
         // Productos con bajo stock
-        $lowStockProducts = $this->getLowStockProducts();
+        $lowStockProducts = $this->getLowStockProducts($context, $inventoryReady);
         
-        // Cotizaciones pendientes
-        $pendingQuotes = $this->getPendingQuotes();
+        $pendingQuotes = collect();
 
         return view('dashboard.index', compact(
             'kpis',
@@ -76,40 +76,37 @@ class DashboardController extends Controller
         ));
     }
 
-    private function getMainKPIs()
+    private function getMainKPIs(ClinicContext $context, bool $inventoryReady, bool $billingReady): array
     {
         $today = Carbon::today();
         $thisMonth = Carbon::now()->startOfMonth();
-        $lastMonth = Carbon::now()->subMonth()->startOfMonth();
 
         return [
-            'total_patients' => Patient::count(),
-            'total_staff' => Staff::count(),
-            'today_appointments' => Appointment::whereDate('appointment_date', $today)->count(),
-            'monthly_appointments' => Appointment::where('appointment_date', '>=', $thisMonth)->count(),
-            'monthly_revenue' => Payment::where('payment_date', '>=', $thisMonth)
+            'total_patients' => Patient::forClinic($context)->count(),
+            'total_staff' => Staff::forClinic($context)->count(),
+            'today_appointments' => $this->clinicalRecords->appointments($context)->whereDate('appointment_date', $today)->count(),
+            'monthly_appointments' => $this->clinicalRecords->appointments($context)->where('appointment_date', '>=', $thisMonth)->count(),
+            'monthly_revenue' => $billingReady ? Payment::forClinic($context)->where('payment_date', '>=', $thisMonth)
                 ->where('status', 'completed')
-                ->sum('amount'),
-            'monthly_expenses' => Purchase::where('purchase_date', '>=', $thisMonth)
-                ->where('status', 'received')
-                ->sum('total_amount'),
-            'pending_invoices' => Invoice::where('status', '!=', 'paid')->count(),
-            'overdue_invoices' => Invoice::where('due_date', '<', $today)
+                ->sum('amount') : 0,
+            'monthly_expenses' => 0,
+            'pending_invoices' => $billingReady ? Invoice::forClinic($context)->where('status', '!=', 'paid')->count() : 0,
+            'overdue_invoices' => $billingReady ? Invoice::forClinic($context)->where('due_date', '<', $today)
                 ->where('status', '!=', 'paid')
-                ->count(),
-            'active_treatment_plans' => TreatmentPlan::where('status', 'active')->count(),
-            'pending_lab_works' => LabWork::whereIn('status', ['pending', 'sent', 'in_progress'])->count(),
-            'low_stock_products' => Inventory::with('product')
+                ->count() : 0,
+            'active_treatment_plans' => 0,
+            'pending_lab_works' => 0,
+            'low_stock_products' => $inventoryReady ? Inventory::forClinic($context)->with('product')
                 ->whereHas('product', function($query) {
                     $query->where('is_active', true);
                 })
                 ->whereRaw('available_stock <= (SELECT minimum_stock FROM products WHERE products.id = inventory.product_id)')
-                ->count(),
-            'total_suppliers' => Supplier::where('is_active', true)->count(),
+                ->count() : 0,
+            'total_suppliers' => 0,
         ];
     }
 
-    private function getAppointmentStats()
+    private function getAppointmentStats(ClinicContext $context): array
     {
         $today = Carbon::today();
         $thisWeek = Carbon::now()->startOfWeek();
@@ -117,31 +114,31 @@ class DashboardController extends Controller
 
         return [
             'today' => [
-                'total' => Appointment::whereDate('appointment_date', $today)->count(),
-                'completed' => Appointment::whereDate('appointment_date', $today)
+                'total' => $this->clinicalRecords->appointments($context)->whereDate('appointment_date', $today)->count(),
+                'completed' => $this->clinicalRecords->appointments($context)->whereDate('appointment_date', $today)
                     ->whereHas('status', function($query) {
                         $query->where('name', 'completed');
                     })->count(),
-                'cancelled' => Appointment::whereDate('appointment_date', $today)
+                'cancelled' => $this->clinicalRecords->appointments($context)->whereDate('appointment_date', $today)
                     ->whereHas('status', function($query) {
                         $query->where('name', 'cancelled');
                     })->count(),
             ],
             'this_week' => [
-                'total' => Appointment::where('appointment_date', '>=', $thisWeek)->count(),
-                'completed' => Appointment::where('appointment_date', '>=', $thisWeek)
+                'total' => $this->clinicalRecords->appointments($context)->where('appointment_date', '>=', $thisWeek)->count(),
+                'completed' => $this->clinicalRecords->appointments($context)->where('appointment_date', '>=', $thisWeek)
                     ->whereHas('status', function($query) {
                         $query->where('name', 'completed');
                     })->count(),
             ],
             'this_month' => [
-                'total' => Appointment::where('appointment_date', '>=', $thisMonth)->count(),
-                'completed' => Appointment::where('appointment_date', '>=', $thisMonth)
+                'total' => $this->clinicalRecords->appointments($context)->where('appointment_date', '>=', $thisMonth)->count(),
+                'completed' => $this->clinicalRecords->appointments($context)->where('appointment_date', '>=', $thisMonth)
                     ->whereHas('status', function($query) {
                         $query->where('name', 'completed');
                     })->count(),
             ],
-            'by_status' => Appointment::with('status')
+            'by_status' => $this->clinicalRecords->appointments($context)->with('status')
                 ->get()
                 ->groupBy('status.name')
                 ->map->count()
@@ -149,70 +146,93 @@ class DashboardController extends Controller
         ];
     }
 
-    private function getFinancialStats()
+    private function getFinancialStats(ClinicContext $context, bool $billingReady): array
     {
+        if (! $billingReady) {
+            return [
+                'daily_revenue' => 0,
+                'monthly_revenue' => 0,
+                'last_month_revenue' => 0,
+                'pending_payments' => 0,
+                'overdue_invoices' => 0,
+                'monthly_expenses' => 0,
+                'profit_margin' => 0,
+            ];
+        }
+
         $today = Carbon::today();
         $thisMonth = Carbon::now()->startOfMonth();
         $lastMonth = Carbon::now()->subMonth()->startOfMonth();
 
         return [
-            'daily_revenue' => Payment::whereDate('payment_date', $today)
+            'daily_revenue' => Payment::forClinic($context)->whereDate('payment_date', $today)
                 ->where('status', 'completed')
                 ->sum('amount'),
-            'monthly_revenue' => Payment::where('payment_date', '>=', $thisMonth)
+            'monthly_revenue' => Payment::forClinic($context)->where('payment_date', '>=', $thisMonth)
                 ->where('status', 'completed')
                 ->sum('amount'),
-            'last_month_revenue' => Payment::whereBetween('payment_date', [$lastMonth, $thisMonth])
+            'last_month_revenue' => Payment::forClinic($context)->whereBetween('payment_date', [$lastMonth, $thisMonth])
                 ->where('status', 'completed')
                 ->sum('amount'),
-            'pending_payments' => Payment::where('status', 'pending')->sum('amount'),
-            'overdue_invoices' => Invoice::where('due_date', '<', $today)
+            'pending_payments' => Payment::forClinic($context)->where('status', 'pending')->sum('amount'),
+            'overdue_invoices' => Invoice::forClinic($context)->where('due_date', '<', $today)
                 ->where('status', '!=', 'paid')
                 ->sum('balance_due'),
-            'monthly_expenses' => Purchase::where('purchase_date', '>=', $thisMonth)
-                ->where('status', 'received')
-                ->sum('total_amount'),
-            'profit_margin' => $this->calculateProfitMargin($thisMonth),
+            'monthly_expenses' => 0,
+            'profit_margin' => 0,
         ];
     }
 
-    private function getInventoryStats()
+    private function getInventoryStats(ClinicContext $context, bool $inventoryReady): array
     {
+        if (! $inventoryReady) {
+            return [
+                'total_products' => 0,
+                'low_stock' => 0,
+                'out_of_stock' => 0,
+                'total_value' => 0,
+                'expiring_soon' => 0,
+                'expired' => 0,
+            ];
+        }
+
         return [
-            'total_products' => Product::where('is_active', true)->count(),
-            'low_stock' => Inventory::with('product')
+            'total_products' => Inventory::forClinic($context)->distinct()->count('product_id'),
+            'low_stock' => Inventory::forClinic($context)->with('product')
                 ->whereHas('product', function($query) {
                     $query->where('is_active', true);
                 })
                 ->whereRaw('available_stock <= (SELECT minimum_stock FROM products WHERE products.id = inventory.product_id)')
                 ->count(),
-            'out_of_stock' => Inventory::where('available_stock', 0)->count(),
-            'total_value' => Inventory::join('products', 'inventory.product_id', '=', 'products.id')
+            'out_of_stock' => Inventory::forClinic($context)->where('available_stock', 0)->count(),
+            'total_value' => Inventory::forClinic($context)->join('products', 'inventory.product_id', '=', 'products.id')
                 ->where('products.is_active', true)
                 ->sum(DB::raw('inventory.current_stock * inventory.average_cost')),
-            'expiring_soon' => Product::where('expiry_date', '<=', Carbon::now()->addDays(30))
+            'expiring_soon' => Product::whereHas('inventories', fn ($query) => $query->forClinic($context))
+                ->where('expiry_date', '<=', Carbon::now()->addDays(30))
                 ->where('expiry_date', '>', Carbon::now())
                 ->count(),
-            'expired' => Product::where('expiry_date', '<', Carbon::now())->count(),
+            'expired' => Product::whereHas('inventories', fn ($query) => $query->forClinic($context))
+                ->where('expiry_date', '<', Carbon::now())->count(),
         ];
     }
 
-    private function getTodayAppointments()
+    private function getTodayAppointments(ClinicContext $context)
     {
         $today = Carbon::today();
         
-        return Appointment::with(['patient', 'staff.user', 'status'])
+        return $this->clinicalRecords->appointments($context)->with(['patient', 'staff.user', 'status'])
             ->whereDate('appointment_date', $today)
             ->orderBy('start_time')
             ->get();
     }
 
-    private function getUpcomingAppointments()
+    private function getUpcomingAppointments(ClinicContext $context)
     {
         $tomorrow = Carbon::tomorrow();
         $nextWeek = Carbon::now()->addWeek();
         
-        return Appointment::with(['patient', 'staff.user', 'status'])
+        return $this->clinicalRecords->appointments($context)->with(['patient', 'staff.user', 'status'])
             ->whereBetween('appointment_date', [$tomorrow, $nextWeek])
             ->whereHas('status', function($query) {
                 $query->whereNotIn('name', ['completed', 'cancelled']);
@@ -223,12 +243,12 @@ class DashboardController extends Controller
             ->get();
     }
 
-    private function getAlerts()
+    private function getAlerts(ClinicContext $context, bool $inventoryReady, bool $billingReady): array
     {
         $alerts = [];
 
         // Citas canceladas hoy
-        $cancelledToday = Appointment::whereDate('appointment_date', Carbon::today())
+        $cancelledToday = $this->clinicalRecords->appointments($context)->whereDate('appointment_date', Carbon::today())
             ->whereHas('status', function($query) {
                 $query->where('name', 'cancelled');
             })
@@ -243,9 +263,11 @@ class DashboardController extends Controller
         }
 
         // Facturas vencidas
-        $overdueInvoices = Invoice::where('due_date', '<', Carbon::today())
-            ->where('status', '!=', 'paid')
-            ->count();
+        $overdueInvoices = $billingReady
+            ? Invoice::forClinic($context)->where('due_date', '<', Carbon::today())
+                ->where('status', '!=', 'paid')
+                ->count()
+            : 0;
         
         if ($overdueInvoices > 0) {
             $alerts[] = [
@@ -256,12 +278,14 @@ class DashboardController extends Controller
         }
 
         // Productos con bajo stock
-        $lowStockCount = Inventory::with('product')
-            ->whereHas('product', function($query) {
-                $query->where('is_active', true);
-            })
-            ->whereRaw('available_stock <= (SELECT minimum_stock FROM products WHERE products.id = inventory.product_id)')
-            ->count();
+        $lowStockCount = $inventoryReady
+            ? Inventory::forClinic($context)->with('product')
+                ->whereHas('product', function($query) {
+                    $query->where('is_active', true);
+                })
+                ->whereRaw('available_stock <= (SELECT minimum_stock FROM products WHERE products.id = inventory.product_id)')
+                ->count()
+            : 0;
         
         if ($lowStockCount > 0) {
             $alerts[] = [
@@ -271,54 +295,50 @@ class DashboardController extends Controller
             ];
         }
 
-        // Trabajos de laboratorio atrasados
-        $overdueLabWorks = LabWork::where('expected_delivery', '<', Carbon::today())
-            ->whereIn('status', ['pending', 'sent', 'in_progress'])
-            ->count();
-        
-        if ($overdueLabWorks > 0) {
-            $alerts[] = [
-                'type' => 'danger',
-                'message' => "{$overdueLabWorks} trabajos de laboratorio atrasados",
-                'icon' => 'lab',
-            ];
-        }
-
         return $alerts;
     }
 
-    private function getChartData()
+    private function getChartData(ClinicContext $context, bool $inventoryReady, bool $billingReady): array
     {
         // Citas por día de la semana (últimos 7 días)
         $appointmentsByDay = [];
         for ($i = 6; $i >= 0; $i--) {
             $date = Carbon::now()->subDays($i);
-            $appointmentsByDay[$date->format('D')] = Appointment::whereDate('appointment_date', $date)->count();
+            $appointmentsByDay[$date->format('D')] = $this->clinicalRecords->appointments($context)
+                ->whereDate('appointment_date', $date)
+                ->count();
         }
 
         // Ingresos por mes (últimos 6 meses)
         $revenueByMonth = [];
         for ($i = 5; $i >= 0; $i--) {
             $month = Carbon::now()->subMonths($i);
-            $revenueByMonth[$month->format('M Y')] = Payment::whereYear('payment_date', $month->year)
-                ->whereMonth('payment_date', $month->month)
-                ->where('status', 'completed')
-                ->sum('amount');
+            $revenueByMonth[$month->format('M Y')] = $billingReady
+                ? Payment::forClinic($context)->whereYear('payment_date', $month->year)
+                    ->whereMonth('payment_date', $month->month)
+                    ->where('status', 'completed')
+                    ->sum('amount')
+                : 0;
         }
 
         // Citas por estado (incluyendo todos los estados)
-        $appointmentsByStatus = Appointment::with('status')
+        $appointmentsByStatus = $this->clinicalRecords->appointments($context)->with('status')
             ->get()
             ->groupBy('status.name')
             ->map->count()
             ->toArray();
 
         // Productos por categoría
-        $productsByCategory = Product::select('category', DB::raw('count(*) as count'))
-            ->where('is_active', true)
-            ->groupBy('category')
-            ->pluck('count', 'category')
-            ->toArray();
+        $productsByCategory = $inventoryReady
+            ? Product::query()
+                ->join('inventory', 'inventory.product_id', '=', 'products.id')
+                ->where('inventory.clinic_id', $context->clinicId)
+                ->where('products.is_active', true)
+                ->select('products.category', DB::raw('count(distinct products.id) as count'))
+                ->groupBy('products.category')
+                ->pluck('count', 'products.category')
+                ->toArray()
+            : [];
 
         return [
             'appointments_by_day' => $appointmentsByDay,
@@ -329,57 +349,29 @@ class DashboardController extends Controller
     }
 
 
-    private function getPendingLabWorks()
+    private function getLowStockProducts(ClinicContext $context, bool $inventoryReady)
     {
-        return LabWork::with(['patient', 'dentalLab', 'items.prosthesis'])
-            ->whereIn('status', ['pending', 'sent', 'in_progress'])
-            ->orderBy('expected_delivery')
-            ->limit(5)
-            ->get();
-    }
+        if (! $inventoryReady) {
+            return collect();
+        }
 
-    private function getLowStockProducts()
-    {
-        return Product::with('inventory')
+        return Product::with(['inventories' => fn ($query) => $query->forClinic($context)])
             ->where('is_active', true)
-            ->whereHas('inventory', function($query) {
-                $query->whereRaw('available_stock <= minimum_stock');
+            ->whereHas('inventories', function($query) use ($context) {
+                $query->forClinic($context)
+                    ->whereRaw('available_stock <= (SELECT minimum_stock FROM products WHERE products.id = inventory.product_id)');
             })
             ->limit(5)
             ->get();
     }
 
-    private function getPendingQuotes()
-    {
-        return \App\Models\Quote::with(['patient', 'staff.user'])
-            ->where('status', 'pending')
-            ->where('valid_until', '>=', Carbon::today())
-            ->orderBy('valid_until')
-            ->limit(5)
-            ->get();
-    }
-
-    private function calculateProfitMargin($startDate)
-    {
-        $revenue = Payment::where('payment_date', '>=', $startDate)
-            ->where('status', 'completed')
-            ->sum('amount');
-        
-        $expenses = Purchase::where('purchase_date', '>=', $startDate)
-            ->where('status', 'received')
-            ->sum('total_amount');
-        
-        if ($revenue == 0) return 0;
-        
-        return round((($revenue - $expenses) / $revenue) * 100, 2);
-    }
-
     public function getAppointmentData(Request $request)
     {
+        $context = $this->clinicalRecords->context($request);
         $startDate = Carbon::parse($request->start_date);
         $endDate = Carbon::parse($request->end_date);
         
-        $appointments = Appointment::with(['patient', 'staff.user'])
+        $appointments = $this->clinicalRecords->appointments($context)->with(['patient', 'staff.user'])
             ->whereBetween('appointment_date', [$startDate, $endDate])
             ->get();
         
@@ -388,28 +380,29 @@ class DashboardController extends Controller
 
     public function getRevenueData(Request $request)
     {
+        $context = $this->clinicalRecords->context($request);
         $period = $request->period ?? 'month'; // month, week, day
         
         switch ($period) {
             case 'day':
-                $data = $this->getDailyRevenueData();
+                $data = $this->getDailyRevenueData($context);
                 break;
             case 'week':
-                $data = $this->getWeeklyRevenueData();
+                $data = $this->getWeeklyRevenueData($context);
                 break;
             default:
-                $data = $this->getMonthlyRevenueData();
+                $data = $this->getMonthlyRevenueData($context);
         }
         
         return response()->json($data);
     }
 
-    private function getDailyRevenueData()
+    private function getDailyRevenueData(ClinicContext $context): array
     {
         $data = [];
         for ($i = 29; $i >= 0; $i--) {
             $date = Carbon::now()->subDays($i);
-            $revenue = Payment::whereDate('payment_date', $date)
+            $revenue = Payment::forClinic($context)->whereDate('payment_date', $date)
                 ->where('status', 'completed')
                 ->sum('amount');
             
@@ -422,7 +415,7 @@ class DashboardController extends Controller
         return $data;
     }
 
-    private function getWeeklyRevenueData()
+    private function getWeeklyRevenueData(ClinicContext $context): array
     {
         $data = [];
         for ($i = 11; $i >= 0; $i--) {
@@ -430,7 +423,7 @@ class DashboardController extends Controller
             $weekStart = $week->startOfWeek();
             $weekEnd = $week->copy()->endOfWeek();
             
-            $revenue = Payment::whereBetween('payment_date', [$weekStart, $weekEnd])
+            $revenue = Payment::forClinic($context)->whereBetween('payment_date', [$weekStart, $weekEnd])
                 ->where('status', 'completed')
                 ->sum('amount');
             
@@ -443,13 +436,13 @@ class DashboardController extends Controller
         return $data;
     }
 
-    private function getMonthlyRevenueData()
+    private function getMonthlyRevenueData(ClinicContext $context): array
     {
         $data = [];
         for ($i = 11; $i >= 0; $i--) {
             $month = Carbon::now()->subMonths($i);
             
-            $revenue = Payment::whereYear('payment_date', $month->year)
+            $revenue = Payment::forClinic($context)->whereYear('payment_date', $month->year)
                 ->whereMonth('payment_date', $month->month)
                 ->where('status', 'completed')
                 ->sum('amount');

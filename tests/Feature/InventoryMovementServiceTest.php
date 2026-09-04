@@ -11,19 +11,22 @@ use App\Services\InventoryMovementService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use InvalidArgumentException;
 use RuntimeException;
+use Tests\Concerns\InteractsWithClinicalContext;
 use Tests\TestCase;
 
 class InventoryMovementServiceTest extends TestCase
 {
     use RefreshDatabase;
+    use InteractsWithClinicalContext;
 
     public function test_restock_updates_inventory_and_creates_auditable_movement(): void
     {
-        [$user, $inventory] = $this->inventoryFixture(5);
+        [$user, $inventory, $context] = $this->inventoryFixture(5);
 
         $movement = app(InventoryMovementService::class)->adjust(
             new InventoryMovementData($inventory->id, $inventory->product_id, 'restock', 3, 'Compra recibida'),
-            $user
+            $user,
+            $context,
         );
 
         $this->assertSame(8, $inventory->fresh()->current_stock);
@@ -43,25 +46,27 @@ class InventoryMovementServiceTest extends TestCase
 
     public function test_adjustment_rejects_invalid_input_before_database_work(): void
     {
-        [$user, $inventory] = $this->inventoryFixture(5);
+        [$user, $inventory, $context] = $this->inventoryFixture(5);
 
         $this->expectException(InvalidArgumentException::class);
 
         app(InventoryMovementService::class)->adjust(
             new InventoryMovementData($inventory->id, $inventory->product_id, 'invalid', 0),
-            $user
+            $user,
+            $context,
         );
     }
 
     public function test_consumption_rejects_negative_result(): void
     {
-        [$user, $inventory] = $this->inventoryFixture(2);
+        [$user, $inventory, $context] = $this->inventoryFixture(2);
 
         $this->expectException(RuntimeException::class);
 
         app(InventoryMovementService::class)->adjust(
             new InventoryMovementData($inventory->id, $inventory->product_id, 'consumption', 3, 'Uso clínico'),
-            $user
+            $user,
+            $context,
         );
 
         $this->assertSame(2, $inventory->fresh()->current_stock);
@@ -70,14 +75,15 @@ class InventoryMovementServiceTest extends TestCase
 
     public function test_reversal_creates_compensating_movement_without_deleting_original(): void
     {
-        [$user, $inventory] = $this->inventoryFixture(5);
+        [$user, $inventory, $context] = $this->inventoryFixture(5);
         $service = app(InventoryMovementService::class);
 
         $original = $service->adjust(
             new InventoryMovementData($inventory->id, $inventory->product_id, 'restock', 3, 'Compra recibida'),
             $user,
+            $context,
         );
-        $reversal = $service->reverse($original, $user);
+        $reversal = $service->reverse($original, $user, $context);
 
         $this->assertSame(5, $inventory->fresh()->current_stock);
         $this->assertSame('consumption', $reversal->type);
@@ -87,12 +93,13 @@ class InventoryMovementServiceTest extends TestCase
         $this->assertDatabaseCount('inventory_movements', 2);
 
         $this->expectException(InvalidArgumentException::class);
-        $service->reverse($original, $user);
+        $service->reverse($original, $user, $context);
     }
 
     private function inventoryFixture(int $stock): array
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create(['is_active' => true]);
+        $context = $this->clinicalContextFor($user, ['adjust_inventory']);
         $product = Product::query()->create([
             'product_code' => 'TEST-' . uniqid(),
             'name' => 'Producto de prueba',
@@ -101,12 +108,13 @@ class InventoryMovementServiceTest extends TestCase
             'minimum_stock' => 1,
             'created_by' => $user->id,
         ]);
-        $inventory = Inventory::query()->create([
+        $inventory = new Inventory([
             'product_id' => $product->id,
             'current_stock' => $stock,
             'available_stock' => $stock,
         ]);
+        $inventory->forceFill(['clinic_id' => $context->clinicId])->save();
 
-        return [$user, $inventory];
+        return [$user, $inventory, $context];
     }
 }

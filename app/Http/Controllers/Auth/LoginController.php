@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Models\User;
+use App\Modules\Clinics\Services\ClinicSelectionService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -22,7 +24,7 @@ class LoginController extends Controller
     /**
      * Handle an incoming authentication request.
      */
-    public function store(LoginRequest $request): RedirectResponse
+    public function store(LoginRequest $request, ClinicSelectionService $selection): RedirectResponse
     {
         $request->authenticate();
 
@@ -40,6 +42,18 @@ class LoginController extends Controller
         // activity()
         //     ->causedBy(Auth::user())
         //     ->log('Usuario inició sesión');
+
+        $user = Auth::user();
+        $clinicId = $request->session()->get('clinic_id');
+        $context = $user instanceof User && $clinicId !== null
+            ? $selection->resolveFor($user, $clinicId)
+            : null;
+
+        if ($context === null) {
+            $request->session()->forget(['clinic_id', 'clinic_site_id']);
+
+            return redirect()->route('clinics.select');
+        }
 
         return redirect()->intended(route('dashboard'));
     }

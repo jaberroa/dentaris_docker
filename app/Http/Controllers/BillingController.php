@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\Billing\CancelInvoiceRequest;
+use App\Http\Requests\Billing\StoreInvoiceRequest;
 use App\Http\Requests\Billing\UpdateInvoiceRequest;
 use App\Models\Invoice;
 use App\Models\Payment;
@@ -13,9 +14,11 @@ use App\Models\Staff;
 use App\Models\CdtCatalog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use App\Services\InvoiceLifecycleService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use InvalidArgumentException;
+use App\Modules\Clinics\Data\ClinicContext;
 
 class BillingController extends Controller
 {
@@ -26,7 +29,8 @@ class BillingController extends Controller
 
     public function index(Request $request)
     {
-        $query = Invoice::with(['patient', 'staff.user', 'creator']);
+        $context = $this->clinicContext($request);
+        $query = Invoice::forClinic($context)->with(['patient', 'staff.user', 'creator']);
 
         if ($request->filled('search')) {
             $search = $request->search;
@@ -46,61 +50,53 @@ class BillingController extends Controller
         $invoices = $query->orderBy('invoice_date', 'desc')->paginate(20);
 
         $statuses = ['draft', 'sent', 'paid', 'overdue', 'cancelled'];
-        $patients = Patient::select('id', 'first_name', 'last_name')->orderBy('last_name')->get();
-        $staff = Staff::with('user')->where('is_active', true)->get();
+        $patients = Patient::forClinic($context)->select('id', 'first_name', 'last_name')->orderBy('last_name')->get();
+        $staff = Staff::forClinic($context)->with('user')->where('is_active', true)->get();
 
         return view('billing.index', compact('invoices', 'statuses', 'patients', 'staff'));
     }
 
-    public function create()
+    public function create(Request $request)
     {
-        $patients = Patient::select('id', 'first_name', 'last_name', 'patient_code')
+        $context = $this->clinicContext($request);
+        $patients = Patient::forClinic($context)->select('id', 'first_name', 'last_name', 'patient_code')
             ->orderBy('last_name')
             ->get();
         
-        $staff = Staff::with('user')
+        $staff = Staff::forClinic($context)->with('user')
             ->where('is_active', true)
             ->get();
         
         $cdtCatalog = CdtCatalog::where('is_active', true)
-            ->orderBy('name')
+            ->orderBy('procedure_name')
             ->get();
 
         return view('billing.create', compact('patients', 'staff', 'cdtCatalog'));
     }
 
-    public function store(Request $request)
+    public function store(StoreInvoiceRequest $request)
     {
-        $request->validate([
-            'patient_id' => 'required|exists:patients,id',
-            'staff_id' => 'required|exists:staff,id',
-            'invoice_date' => 'required|date',
-            'due_date' => 'nullable|date|after_or_equal:invoice_date',
-            'tax_rate' => 'nullable|numeric|min:0|max:100',
-            'discount_amount' => 'nullable|numeric|min:0',
-            'notes' => 'nullable|string',
-            'items' => 'required|array|min:1',
-            'items.*.cdt_catalog_id' => 'required|exists:cdt_catalog,id',
-            'items.*.quantity' => 'required|integer|min:1',
-            'items.*.unit_price' => 'required|numeric|min:0',
-        ]);
+        $context = $request->clinicContext();
+        abort_unless($context instanceof ClinicContext, 403, 'El contexto clínico no está disponible.');
+        $data = $request->validated();
 
-        DB::transaction(function() use ($request) {
-            $invoice = Invoice::create([
-                'invoice_number' => 'INV-' . str_pad(Invoice::count() + 1, 6, '0', STR_PAD_LEFT),
-                'patient_id' => $request->patient_id,
-                'staff_id' => $request->staff_id,
-                'invoice_date' => $request->invoice_date,
-                'due_date' => $request->due_date,
+        DB::transaction(function() use ($request, $data, $context) {
+            $invoice = new Invoice([
+                'invoice_number' => 'INV-'.now()->format('Ymd').'-'.Str::upper(Str::random(8)),
+                'patient_id' => $data['patient_id'],
+                'staff_id' => $data['staff_id'],
+                'invoice_date' => $data['invoice_date'],
+                'due_date' => $data['due_date'] ?? null,
                 'status' => 'draft',
-                'tax_rate' => $request->tax_rate ?: 0,
-                'discount_amount' => $request->discount_amount ?: 0,
-                'notes' => $request->notes,
-                'created_by' => auth()->id(),
+                'tax_rate' => $data['tax_rate'] ?? 0,
+                'discount_amount' => $data['discount_amount'] ?? 0,
+                'notes' => $data['notes'] ?? null,
+                'created_by' => $request->user()->id,
             ]);
+            $invoice->forceFill(['clinic_id' => $context->clinicId])->save();
 
             $subtotal = 0;
-            foreach ($request->items as $index => $itemData) {
+            foreach ($data['items'] as $index => $itemData) {
                 $itemTotal = $itemData['quantity'] * $itemData['unit_price'];
                 $subtotal += $itemTotal;
                 $catalogItem = CdtCatalog::query()->findOrFail($itemData['cdt_catalog_id']);
@@ -117,27 +113,36 @@ class BillingController extends Controller
             }
 
             $invoice->calculateTotals();
+
+            activity('billing')
+                ->causedBy($request->user())
+                ->performedOn($invoice)
+                ->withProperties(['clinic_id' => $context->clinicId, 'items_count' => count($data['items'])])
+                ->log('invoice.created');
         });
 
         return redirect()->route('billing.index')
             ->with('success', 'Factura creada correctamente');
     }
 
-    public function show(Invoice $invoice)
+    public function show(Request $request, Invoice $invoice)
     {
+        $context = $this->clinicContext($request);
+        $invoice = $this->invoiceForContext($invoice, $context);
         $invoice->load([
             'patient',
             'staff.user',
             'items.cdtCatalog',
-            'payments',
+            'payments' => fn ($query) => $query->forClinic($context),
             'creator'
         ]);
 
         return view('billing.show', compact('invoice'));
     }
 
-    public function edit(Invoice $invoice)
+    public function edit(Request $request, Invoice $invoice)
     {
+        $invoice = $this->invoiceForContext($invoice, $this->clinicContext($request));
         $invoice->load('items.cdtCatalog');
         $cdtCatalog = CdtCatalog::query()->where('is_active', true)->orderBy('procedure_name')->get();
 
@@ -146,8 +151,10 @@ class BillingController extends Controller
 
     public function update(UpdateInvoiceRequest $request, Invoice $invoice, InvoiceLifecycleService $service)
     {
+        $context = $this->clinicContext($request);
+        $invoice = $this->invoiceForContext($invoice, $context);
         try {
-            $invoice = $service->updateDraft($invoice, $request->validated(), $request->user());
+            $invoice = $service->updateDraft($invoice, $request->validated(), $request->user(), $context);
         } catch (InvalidArgumentException $exception) {
             return back()->withInput()->with('error', $exception->getMessage());
         }
@@ -155,20 +162,29 @@ class BillingController extends Controller
         return redirect()->route('billing.show', $invoice)->with('success', 'Factura actualizada correctamente.');
     }
 
-    public function downloadPdf(Invoice $invoice)
+    public function downloadPdf(Request $request, Invoice $invoice)
     {
+        $context = $this->clinicContext($request);
+        $invoice = $this->invoiceForContext($invoice, $context);
         $invoice->load(['patient','staff.user','items.cdtCatalog']);
-        activity('billing')->causedBy(request()->user())->performedOn($invoice)->log('invoice.pdf.downloaded');
+        activity('billing')->causedBy($request->user())->performedOn($invoice)->withProperties(['clinic_id' => $context->clinicId])->log('invoice.pdf.downloaded');
         return Pdf::loadView('billing.pdf', compact('invoice'))->download('factura_'.$invoice->invoice_number.'.pdf');
     }
 
-    public function sendInvoice(Invoice $invoice, InvoiceLifecycleService $service)
-    { try { $service->send($invoice, request()->user()); } catch (InvalidArgumentException $e) { return back()->with('error',$e->getMessage()); } return back()->with('success','Factura marcada como enviada.'); }
+    public function sendInvoice(Request $request, Invoice $invoice, InvoiceLifecycleService $service)
+    {
+        $context = $this->clinicContext($request);
+        $invoice = $this->invoiceForContext($invoice, $context);
+        try { $service->send($invoice, $request->user(), $context); } catch (InvalidArgumentException $e) { return back()->with('error',$e->getMessage()); }
+        return back()->with('success','Factura marcada como enviada.');
+    }
 
     public function destroy(CancelInvoiceRequest $request, Invoice $invoice, InvoiceLifecycleService $service)
     {
+        $context = $this->clinicContext($request);
+        $invoice = $this->invoiceForContext($invoice, $context);
         try {
-            $service->cancel($invoice, $request->user(), $request->validated('reason'));
+            $service->cancel($invoice, $request->user(), $request->validated('reason'), $context);
         } catch (InvalidArgumentException $exception) {
             return back()->with('error', $exception->getMessage());
         }
@@ -178,6 +194,8 @@ class BillingController extends Controller
 
     public function addPayment(Request $request, Invoice $invoice)
     {
+        $context = $this->clinicContext($request);
+        $invoice = $this->invoiceForContext($invoice, $context);
         $request->validate([
             'amount' => 'required|numeric|min:0.01|max:' . $invoice->balance_due,
             'payment_method' => 'required|string',
@@ -186,8 +204,8 @@ class BillingController extends Controller
         ]);
 
         DB::transaction(function() use ($invoice, $request) {
-            Payment::create([
-                'payment_number' => 'PAY-' . str_pad(Payment::count() + 1, 6, '0', STR_PAD_LEFT),
+            $payment = new Payment([
+                'payment_number' => 'PAY-'.now()->format('Ymd').'-'.Str::upper(Str::random(8)),
                 'invoice_id' => $invoice->id,
                 'patient_id' => $invoice->patient_id,
                 'payment_date' => $request->payment_date,
@@ -197,6 +215,7 @@ class BillingController extends Controller
                 'status' => 'completed',
                 'processed_by' => auth()->id(),
             ]);
+            $payment->forceFill(['clinic_id' => $invoice->clinic_id])->save();
 
             $invoice->addPayment($request->amount, $request->payment_method);
         });
@@ -205,34 +224,54 @@ class BillingController extends Controller
             ->with('success', 'Pago registrado correctamente');
     }
 
-    public function markAsPaid(Invoice $invoice)
+    public function markAsPaid(Request $request, Invoice $invoice)
     {
+        $invoice = $this->invoiceForContext($invoice, $this->clinicContext($request));
         $invoice->markAsPaid();
         return redirect()->route('billing.show', $invoice)
             ->with('success', 'Factura marcada como pagada');
     }
 
-    public function payments()
+    public function payments(Request $request)
     {
-        $payments = Payment::with(['invoice.patient', 'patient'])
+        $context = $this->clinicContext($request);
+        $payments = Payment::forClinic($context)->with(['invoice.patient', 'patient'])
             ->orderBy('payment_date', 'desc')
             ->paginate(20);
 
         return view('billing.payments', compact('payments'));
     }
 
-    public function report()
+    public function report(Request $request)
     {
+        $context = $this->clinicContext($request);
         $stats = [
-            'total_invoices' => Invoice::count(),
-            'paid_invoices' => Invoice::where('status', 'paid')->count(),
-            'total_revenue' => Payment::where('status', 'completed')->sum('amount'),
-            'monthly_revenue' => Payment::whereMonth('payment_date', now()->month)
+            'total_invoices' => Invoice::forClinic($context)->count(),
+            'paid_invoices' => Invoice::forClinic($context)->where('status', 'paid')->count(),
+            'total_revenue' => Payment::forClinic($context)->where('status', 'completed')->sum('amount'),
+            'monthly_revenue' => Payment::forClinic($context)->whereMonth('payment_date', now()->month)
                 ->whereYear('payment_date', now()->year)
                 ->where('status', 'completed')
                 ->sum('amount'),
         ];
 
         return view('billing.report', compact('stats'));
+    }
+
+    private function clinicContext(Request $request): ClinicContext
+    {
+        $context = $request->attributes->get(ClinicContext::class)
+            ?? $request->attributes->get('clinic.context');
+
+        abort_unless($context instanceof ClinicContext, 403, 'El contexto clínico no está disponible.');
+
+        return $context;
+    }
+
+    private function invoiceForContext(Invoice $invoice, ClinicContext $context): Invoice
+    {
+        abort_unless($invoice->clinic_id !== null && (int) $invoice->clinic_id === $context->clinicId, 404);
+
+        return $invoice;
     }
 }

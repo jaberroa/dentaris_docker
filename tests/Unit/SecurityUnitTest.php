@@ -250,7 +250,7 @@ class SecurityUnitTest extends TestCase
 
     public function test_cache_service_methods()
     {
-        $service = new \App\Services\CacheService();
+        $service = app(\App\Services\CacheService::class);
         
         $methods = [
             'getDashboardKpis',

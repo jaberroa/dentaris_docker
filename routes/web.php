@@ -25,6 +25,7 @@ use App\Http\Controllers\BillingController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\TreatmentController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\ClinicContextController;
 use Illuminate\Support\Facades\Route;
 
 // Portal web público (raíz)
@@ -53,12 +54,19 @@ Route::post('/logout', [LoginController::class, 'destroy'])->name('logout');
 
 
 // Rutas protegidas (requieren autenticación)
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth', 'clinic.selection'])->group(function () {
+    Route::get('/clinics/select', [ClinicContextController::class, 'index'])->name('clinics.select');
+    Route::post('/clinics/context', [ClinicContextController::class, 'store'])->name('clinics.context.store');
+    Route::delete('/clinics/context', [ClinicContextController::class, 'destroy'])->name('clinics.context.destroy');
     
     // Dashboard
-    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
-    Route::get('/dashboard/appointments', [DashboardController::class, 'getAppointmentData'])->name('dashboard.appointments');
-    Route::get('/dashboard/revenue', [DashboardController::class, 'getRevenueData'])->name('dashboard.revenue');
+    Route::middleware('clinic.context')->group(function () {
+        Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+        Route::get('/dashboard/appointments', [DashboardController::class, 'getAppointmentData'])->name('dashboard.appointments');
+        Route::get('/dashboard/revenue', [DashboardController::class, 'getRevenueData'])
+            ->middleware('clinic.domain.ready:billing')
+            ->name('dashboard.revenue');
+    });
     
     // Perfil de usuario
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
@@ -155,18 +163,20 @@ Route::middleware('auth')->group(function () {
     });
     
     // Gestión de Inventario
-    Route::middleware('clinic.context')->group(function () {
-        Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory.index');
+    Route::middleware(['clinic.context', 'clinic.domain.ready:inventory'])->group(function () {
+        Route::get('/inventory', [InventoryController::class, 'index'])
+            ->middleware('can:viewAny,App\Models\Inventory')
+            ->name('inventory.index');
         Route::get('/inventory/movements', [InventoryController::class, 'movements'])
             ->middleware('permission:view_inventory')
             ->name('inventory.movements');
         Route::get('/inventory/locations', [InventoryLocationController::class, 'index'])
             ->middleware('permission:view_inventory')
             ->name('inventory.locations.index');
-        Route::get('/inventory/low-stock', [InventoryController::class, 'lowStock'])->name('inventory.low-stock');
-        Route::get('/inventory/out-of-stock', [InventoryController::class, 'outOfStock'])->name('inventory.out-of-stock');
-        Route::get('/inventory/expiring-soon', [InventoryController::class, 'expiringSoon'])->name('inventory.expiring-soon');
-        Route::get('/inventory/report', [InventoryController::class, 'report'])->name('inventory.report');
+        Route::get('/inventory/low-stock', [InventoryController::class, 'lowStock'])->middleware('permission:view_inventory')->name('inventory.low-stock');
+        Route::get('/inventory/out-of-stock', [InventoryController::class, 'outOfStock'])->middleware('permission:view_inventory')->name('inventory.out-of-stock');
+        Route::get('/inventory/expiring-soon', [InventoryController::class, 'expiringSoon'])->middleware('permission:view_inventory')->name('inventory.expiring-soon');
+        Route::get('/inventory/report', [InventoryController::class, 'report'])->middleware('permission:view_inventory')->name('inventory.report');
         Route::get('/inventory/{inventory}', [InventoryController::class, 'show'])
             ->middleware('can:view,inventory')
             ->name('inventory.show');
@@ -195,8 +205,10 @@ Route::middleware('auth')->group(function () {
     });
     
     // Gestión de Facturación
-    Route::middleware('clinic.context')->group(function () {
-        Route::get('/billing', [BillingController::class, 'index'])->name('billing.index');
+    Route::middleware(['clinic.context', 'clinic.domain.ready:billing'])->group(function () {
+        Route::get('/billing', [BillingController::class, 'index'])
+            ->middleware('can:viewAny,App\Models\Invoice')
+            ->name('billing.index');
 
         Route::middleware('permission:manage_billing')->group(function () {
             Route::get('/billing/create', [BillingController::class, 'create'])->name('billing.create');
@@ -220,13 +232,16 @@ Route::middleware('auth')->group(function () {
     });
     
     // Gestión de Reportes
-    Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
-    
-    Route::middleware('can:view_reports')->group(function () {
-        Route::get('/reports/financial', [ReportController::class, 'financial'])->name('reports.financial');
+    Route::middleware(['clinic.context', 'permission:view_reports'])->group(function () {
+        Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
+        Route::get('/reports/financial', [ReportController::class, 'financial'])
+            ->middleware('clinic.domain.ready:billing')
+            ->name('reports.financial');
         Route::get('/reports/appointments', [ReportController::class, 'appointments'])->name('reports.appointments');
         Route::get('/reports/patients', [ReportController::class, 'patients'])->name('reports.patients');
-        Route::get('/reports/inventory', [ReportController::class, 'inventory'])->name('reports.inventory');
+        Route::get('/reports/inventory', [ReportController::class, 'inventory'])
+            ->middleware('clinic.domain.ready:inventory')
+            ->name('reports.inventory');
         Route::get('/reports/kpis', [ReportController::class, 'kpis'])->name('reports.kpis');
     });
     
@@ -333,15 +348,29 @@ Route::middleware('auth')->group(function () {
     });
     
     // Gestión de Pagos
-    Route::get('/payments', [PaymentController::class, 'index'])->name('payments.index');
-    Route::get('/payments/{payment}', [PaymentController::class, 'show'])->name('payments.show');
-    
-    Route::middleware('can:manage_payments')->group(function () {
-        Route::get('/payments/create', [PaymentController::class, 'create'])->name('payments.create');
-        Route::post('/payments', [PaymentController::class, 'store'])->name('payments.store');
-        Route::get('/payments/{payment}/edit', [PaymentController::class, 'edit'])->name('payments.edit');
-        Route::put('/payments/{payment}', [PaymentController::class, 'update'])->name('payments.update');
-        Route::delete('/payments/{payment}', [PaymentController::class, 'destroy'])->name('payments.destroy');
+    Route::middleware(['clinic.context', 'clinic.domain.ready:billing'])->group(function () {
+        Route::get('/payments', [PaymentController::class, 'index'])
+            ->middleware('can:viewAny,App\Models\Payment')
+            ->name('payments.index');
+
+        Route::middleware('can:create,App\Models\Payment')->group(function () {
+            Route::get('/payments/create', [PaymentController::class, 'create'])->name('payments.create');
+            Route::post('/payments', [PaymentController::class, 'store'])->name('payments.store');
+        });
+
+        Route::get('/payments/{payment}/edit', [PaymentController::class, 'edit'])
+            ->middleware('can:update,payment')
+            ->name('payments.edit');
+        Route::put('/payments/{payment}', [PaymentController::class, 'update'])
+            ->middleware('can:update,payment')
+            ->name('payments.update');
+        Route::delete('/payments/{payment}', [PaymentController::class, 'destroy'])
+            ->middleware('can:delete,payment')
+            ->name('payments.destroy');
+
+        Route::get('/payments/{payment}', [PaymentController::class, 'show'])
+            ->middleware('can:view,payment')
+            ->name('payments.show');
     });
     
     // Gestión de Compras
@@ -360,154 +389,4 @@ Route::middleware('auth')->group(function () {
 
 Route::fallback(function () {
     return view('errors.404');
-});
-    
-    // Gestión de Trabajos de Laboratorio
-
-    Route::get('/lab-works', [LabWorkController::class, 'index'])->name('lab-works.index');
-
-    Route::get('/lab-works/{labWork}', [LabWorkController::class, 'show'])->name('lab-works.show');
-
-    
-
-    Route::middleware('can:manage_lab_works')->group(function () {
-
-        Route::get('/lab-works/create', [LabWorkController::class, 'create'])->name('lab-works.create');
-
-        Route::post('/lab-works', [LabWorkController::class, 'store'])->name('lab-works.store');
-
-        Route::get('/lab-works/{labWork}/edit', [LabWorkController::class, 'edit'])->name('lab-works.edit');
-
-        Route::put('/lab-works/{labWork}', [LabWorkController::class, 'update'])->name('lab-works.update');
-
-        Route::delete('/lab-works/{labWork}', [LabWorkController::class, 'destroy'])->name('lab-works.destroy');
-
-    });
-
-    
-
-    // Gestión de Cotizaciones
-
-    Route::get('/quotes', [QuoteController::class, 'index'])->name('quotes.index');
-
-    Route::get('/quotes/{quote}', [QuoteController::class, 'show'])->name('quotes.show');
-
-    
-
-    Route::middleware('can:manage_quotes')->group(function () {
-
-        Route::get('/quotes/create', [QuoteController::class, 'create'])->name('quotes.create');
-
-        Route::post('/quotes', [QuoteController::class, 'store'])->name('quotes.store');
-
-        Route::get('/quotes/{quote}/edit', [QuoteController::class, 'edit'])->name('quotes.edit');
-
-        Route::put('/quotes/{quote}', [QuoteController::class, 'update'])->name('quotes.update');
-
-        Route::delete('/quotes/{quote}', [QuoteController::class, 'destroy'])->name('quotes.destroy');
-
-    });
-
-    
-
-    // Gestión de Proveedores
-
-    Route::get('/suppliers', [SupplierController::class, 'index'])->name('suppliers.index');
-
-    Route::get('/suppliers/{supplier}', [SupplierController::class, 'show'])->name('suppliers.show');
-
-    
-
-    Route::middleware('can:manage_suppliers')->group(function () {
-
-        Route::get('/suppliers/create', [SupplierController::class, 'create'])->name('suppliers.create');
-
-        Route::post('/suppliers', [SupplierController::class, 'store'])->name('suppliers.store');
-
-        Route::get('/suppliers/{supplier}/edit', [SupplierController::class, 'edit'])->name('suppliers.edit');
-
-        Route::put('/suppliers/{supplier}', [SupplierController::class, 'update'])->name('suppliers.update');
-
-        Route::delete('/suppliers/{supplier}', [SupplierController::class, 'destroy'])->name('suppliers.destroy');
-
-    });
-
-    
-
-    // Gestión de Tratamientos
-
-    Route::get('/treatments', [TreatmentController::class, 'index'])->name('treatments.index');
-
-    Route::get('/treatments/{treatment}', [TreatmentController::class, 'show'])->name('treatments.show');
-
-    
-
-    Route::middleware('can:manage_treatments')->group(function () {
-
-        Route::get('/treatments/create', [TreatmentController::class, 'create'])->name('treatments.create');
-
-        Route::post('/treatments', [TreatmentController::class, 'store'])->name('treatments.store');
-
-        Route::get('/treatments/{treatment}/edit', [TreatmentController::class, 'edit'])->name('treatments.edit');
-
-        Route::put('/treatments/{treatment}', [TreatmentController::class, 'update'])->name('treatments.update');
-
-        Route::delete('/treatments/{treatment}', [TreatmentController::class, 'destroy'])->name('treatments.destroy');
-
-    });
-
-    
-
-    // Gestión de Pagos
-
-    Route::get('/payments', [PaymentController::class, 'index'])->name('payments.index');
-
-    Route::get('/payments/{payment}', [PaymentController::class, 'show'])->name('payments.show');
-
-    
-
-    Route::middleware('can:manage_payments')->group(function () {
-
-        Route::get('/payments/create', [PaymentController::class, 'create'])->name('payments.create');
-
-        Route::post('/payments', [PaymentController::class, 'store'])->name('payments.store');
-
-        Route::get('/payments/{payment}/edit', [PaymentController::class, 'edit'])->name('payments.edit');
-
-        Route::put('/payments/{payment}', [PaymentController::class, 'update'])->name('payments.update');
-
-        Route::delete('/payments/{payment}', [PaymentController::class, 'destroy'])->name('payments.destroy');
-
-    });
-
-    
-
-    // Gestión de Compras
-
-    Route::get('/purchases', [PurchaseController::class, 'index'])->name('purchases.index');
-
-    Route::get('/purchases/{purchase}', [PurchaseController::class, 'show'])->name('purchases.show');
-
-    
-
-    Route::middleware('can:manage_purchases')->group(function () {
-
-        Route::get('/purchases/create', [PurchaseController::class, 'create'])->name('purchases.create');
-
-        Route::post('/purchases', [PurchaseController::class, 'store'])->name('purchases.store');
-
-        Route::get('/purchases/{purchase}/edit', [PurchaseController::class, 'edit'])->name('purchases.edit');
-
-        Route::put('/purchases/{purchase}', [PurchaseController::class, 'update'])->name('purchases.update');
-
-        Route::delete('/purchases/{purchase}', [PurchaseController::class, 'destroy'])->name('purchases.destroy');
-
-    });
-
-
-
-Route::fallback(function () {
-
-    return view('errors.404');
-
 });

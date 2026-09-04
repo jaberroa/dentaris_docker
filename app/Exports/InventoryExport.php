@@ -3,17 +3,25 @@
 namespace App\Exports;
 
 use App\Repositories\InventoryExportRepository;
+use App\Modules\Clinics\Data\ClinicContext;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
 
 class InventoryExport implements FromCollection, WithHeadings, WithMapping
 {
-    public function __construct(private readonly array $filters) {}
+    public function __construct(
+        private readonly array $filters,
+        private readonly ClinicContext $context,
+    ) {}
 
     public function collection()
     {
-        return app(InventoryExportRepository::class)->query($this->filters)->orderBy('id')->limit($this->filters['limit'] ?? 10000)->get();
+        return app(InventoryExportRepository::class)
+            ->query($this->filters, $this->context)
+            ->orderBy('id')
+            ->limit($this->filters['limit'] ?? 10000)
+            ->get();
     }
 
     public function headings(): array

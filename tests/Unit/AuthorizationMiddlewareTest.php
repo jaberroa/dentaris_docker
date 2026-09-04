@@ -8,21 +8,26 @@ use App\Models\User;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
+use Tests\Concerns\InteractsWithClinicalContext;
 use Tests\TestCase;
 
 class AuthorizationMiddlewareTest extends TestCase
 {
+    use RefreshDatabase;
+    use InteractsWithClinicalContext;
+
     public function test_permission_middleware_allows_authorized_user(): void
     {
-        $user = $this->createMock(User::class);
-        $user->method('hasPermission')->with('manage_billing')->willReturn(true);
+        $user = User::factory()->create(['is_active' => true]);
+        $context = $this->clinicalContextFor($user, ['manage_billing']);
+        $request = Request::create('/billing', 'POST');
+        $request->setUserResolver(fn (): User => $user);
+        $request->attributes->set('clinic.context', $context);
 
-        Auth::shouldReceive('check')->once()->andReturn(true);
-        Auth::shouldReceive('user')->once()->andReturn($user);
-
-        $response = (new CheckPermission())->handle(
-            Request::create('/billing', 'POST'),
+        $response = app(CheckPermission::class)->handle(
+            $request,
             fn () => new Response('allowed'),
             'manage_billing'
         );
@@ -33,16 +38,15 @@ class AuthorizationMiddlewareTest extends TestCase
 
     public function test_permission_middleware_rejects_unauthorized_json_request(): void
     {
-        $user = $this->createMock(User::class);
-        $user->method('hasPermission')->with('manage_billing')->willReturn(false);
-
-        Auth::shouldReceive('check')->once()->andReturn(true);
-        Auth::shouldReceive('user')->once()->andReturn($user);
+        $user = User::factory()->create(['is_active' => true]);
+        $context = $this->clinicalContextFor($user, []);
 
         $request = Request::create('/billing', 'POST', [], [], [], [
             'HTTP_ACCEPT' => 'application/json',
         ]);
-        $response = (new CheckPermission())->handle($request, fn () => new Response('allowed'), 'manage_billing');
+        $request->setUserResolver(fn (): User => $user);
+        $request->attributes->set('clinic.context', $context);
+        $response = app(CheckPermission::class)->handle($request, fn () => new Response('allowed'), 'manage_billing');
 
         $this->assertSame(403, $response->getStatusCode());
         $this->assertSame('Unauthorized', $response->getData(true)['error']);
@@ -50,9 +54,7 @@ class AuthorizationMiddlewareTest extends TestCase
 
     public function test_permission_middleware_redirects_guest(): void
     {
-        Auth::shouldReceive('check')->once()->andReturn(false);
-
-        $response = (new CheckPermission())->handle(
+        $response = app(CheckPermission::class)->handle(
             Request::create('/billing', 'POST'),
             fn () => new Response('allowed'),
             'manage_billing'

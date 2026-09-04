@@ -4,20 +4,21 @@ namespace Tests\Feature;
 
 use App\Models\Inventory;
 use App\Models\Product;
-use App\Models\Role;
 use App\Models\User;
 use App\Services\InventoryMovementService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use RuntimeException;
+use Tests\Concerns\InteractsWithClinicalContext;
 use Tests\TestCase;
 
 class InventoryTransferTest extends TestCase
 {
     use RefreshDatabase;
+    use InteractsWithClinicalContext;
 
     public function test_transfer_moves_available_stock_and_records_linked_history(): void
     {
-        [$user, $source, $destination] = $this->fixture();
+        [$user, $source, $destination, $context] = $this->fixture();
 
         $transfer = app(InventoryMovementService::class)->transfer(
             $source->id,
@@ -25,6 +26,7 @@ class InventoryTransferTest extends TestCase
             4,
             'Reposición del consultorio 1',
             $user,
+            $context,
         );
 
         $this->assertSame(6, $source->fresh()->current_stock);
@@ -42,7 +44,7 @@ class InventoryTransferTest extends TestCase
 
     public function test_transfer_rejects_quantity_reserved_or_unavailable_at_source(): void
     {
-        [$user, $source, $destination] = $this->fixture();
+        [$user, $source, $destination, $context] = $this->fixture();
 
         try {
             app(InventoryMovementService::class)->transfer(
@@ -51,6 +53,7 @@ class InventoryTransferTest extends TestCase
                 9,
                 'Intento sin stock disponible',
                 $user,
+                $context,
             );
             $this->fail('La transferencia debió rechazar stock reservado o no disponible.');
         } catch (RuntimeException) {
@@ -64,9 +67,9 @@ class InventoryTransferTest extends TestCase
 
     public function test_user_with_inventory_management_permission_can_transfer_over_http(): void
     {
-        [$user, $source, $destination] = $this->fixture();
+        [$user, $source, $destination, $context] = $this->fixture();
 
-        $this->actingAs($user)
+        $this->actingAs($user)->withSession(['clinic_id' => $context->clinicId])
             ->postJson(route('inventory.transfer'), [
                 'inventory_id' => $source->id,
                 'destination_inventory_id' => $destination->id,
@@ -82,8 +85,9 @@ class InventoryTransferTest extends TestCase
 
     public function test_transfer_history_cannot_be_reversed_as_a_single_movement(): void
     {
-        [$user, $source, $destination] = $this->fixture();
-        $transfer = app(InventoryMovementService::class)->transfer($source->id, $destination->id, 2, 'Traslado interno', $user);
+        [$user, $source, $destination, $context] = $this->fixture();
+        $transfer = app(InventoryMovementService::class)->transfer($source->id, $destination->id, 2, 'Traslado interno', $user, $context);
+        $this->bindClinicalContext($context, $user);
 
         $this->assertFalse($user->can('reverse', $transfer['outgoing']));
         $this->assertFalse($user->can('reverse', $transfer['incoming']));
@@ -95,13 +99,8 @@ class InventoryTransferTest extends TestCase
 
     private function fixture(): array
     {
-        $user = User::factory()->create();
-        $role = Role::query()->create([
-            'name' => 'inventory-manager-'.uniqid(),
-            'display_name' => 'Gestor de inventario',
-            'permissions' => ['manage_inventory'],
-        ]);
-        $user->roles()->attach($role);
+        $user = User::factory()->create(['is_active' => true]);
+        $context = $this->clinicalContextFor($user, ['manage_inventory']);
 
         $product = Product::query()->create([
             'product_code' => 'TRANSFER-'.uniqid(),
@@ -111,21 +110,23 @@ class InventoryTransferTest extends TestCase
             'minimum_stock' => 1,
             'created_by' => $user->id,
         ]);
-        $source = Inventory::query()->create([
+        $source = new Inventory([
             'product_id' => $product->id,
             'current_stock' => 10,
             'reserved_stock' => 2,
             'available_stock' => 8,
             'location' => 'Depósito principal',
         ]);
-        $destination = Inventory::query()->create([
+        $source->forceFill(['clinic_id' => $context->clinicId])->save();
+        $destination = new Inventory([
             'product_id' => $product->id,
             'current_stock' => 3,
             'reserved_stock' => 1,
             'available_stock' => 2,
             'location' => 'Consultorio 1',
         ]);
+        $destination->forceFill(['clinic_id' => $context->clinicId])->save();
 
-        return [$user, $source, $destination];
+        return [$user, $source, $destination, $context];
     }
 }

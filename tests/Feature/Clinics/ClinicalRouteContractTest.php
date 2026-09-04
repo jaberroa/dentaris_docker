@@ -146,6 +146,42 @@ class ClinicalRouteContractTest extends TestCase
         }
     }
 
+    public function test_selector_is_reachable_without_context_and_owned_domains_fail_closed_before_permissions(): void
+    {
+        foreach (['clinics.select', 'clinics.context.store', 'clinics.context.destroy'] as $name) {
+            $route = Route::getRoutes()->getByName($name);
+
+            $this->assertNotNull($route, "Missing route [{$name}].");
+            $this->assertContains('auth', $route->gatherMiddleware(), $name);
+            $this->assertContains('clinic.selection', $route->gatherMiddleware(), $name);
+            $this->assertNotContains('clinic.context', $route->gatherMiddleware(), $name);
+        }
+
+        $domains = [
+            'inventory.index' => 'clinic.domain.ready:inventory',
+            'inventory.show' => 'clinic.domain.ready:inventory',
+            'inventory.export' => 'clinic.domain.ready:inventory',
+            'billing.index' => 'clinic.domain.ready:billing',
+            'billing.show' => 'clinic.domain.ready:billing',
+            'payments.index' => 'clinic.domain.ready:billing',
+            'payments.store' => 'clinic.domain.ready:billing',
+        ];
+
+        foreach ($domains as $name => $readiness) {
+            $route = Route::getRoutes()->getByName($name);
+            $middleware = $route?->gatherMiddleware() ?? [];
+
+            $this->assertNotNull($route, "Missing route [{$name}].");
+            $this->assertContains('clinic.context', $middleware, $name);
+            $this->assertContains($readiness, $middleware, $name);
+            $this->assertLessThan(
+                array_search($readiness, $middleware, true),
+                array_search('clinic.context', $middleware, true),
+                "clinic.context must run before {$readiness} on [{$name}].",
+            );
+        }
+    }
+
     public function test_web_and_api_patient_lists_reject_an_absent_clinic_context(): void
     {
         $user = User::factory()->create(['is_active' => true]);

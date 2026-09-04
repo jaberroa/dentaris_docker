@@ -14,6 +14,7 @@ class CancelInvoiceRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'clinic_id' => ['prohibited'],
             'reason' => ['required', 'string', 'max:1000'],
         ];
     }

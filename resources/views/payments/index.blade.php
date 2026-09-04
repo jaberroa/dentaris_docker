@@ -24,9 +24,11 @@
                 <div class="card-header">
                     <div class="d-flex justify-content-between align-items-center">
                         <h5 class="card-title mb-0">Lista de Pagos</h5>
-                        <a href="{{ route('payments.create') }}" class="btn btn-primary">
-                            <i class="ri-add-line align-middle me-1"></i> Nuevo Pago
-                        </a>
+                        @can('create', App\Models\Payment::class)
+                            <a href="{{ route('payments.create') }}" class="btn btn-primary">
+                                <i class="ri-add-line align-middle me-1"></i> Nuevo Pago
+                            </a>
+                        @endcan
                     </div>
                 </div>
                 <div class="card-body">
@@ -55,9 +57,11 @@
                                             <a href="{{ route('payments.show', $payment) }}" class="btn btn-sm btn-outline-primary">
                                                 <i class="ri-eye-line"></i>
                                             </a>
-                                            <a href="{{ route('payments.edit', $payment) }}" class="btn btn-sm btn-outline-warning">
-                                                <i class="ri-edit-line"></i>
-                                            </a>
+                                            @can('update', $payment)
+                                                <a href="{{ route('payments.edit', $payment) }}" class="btn btn-sm btn-outline-warning">
+                                                    <i class="ri-edit-line"></i>
+                                                </a>
+                                            @endcan
                                         </div>
                                     </td>
                                 </tr>

@@ -3,13 +3,14 @@
 namespace App\Repositories;
 
 use App\Models\Inventory;
+use App\Modules\Clinics\Data\ClinicContext;
 use Illuminate\Database\Eloquent\Builder;
 
 class InventoryExportRepository
 {
-    public function query(array $filters): Builder
+    public function query(array $filters, ClinicContext $context): Builder
     {
-        $query = Inventory::query()->with(['product', 'inventoryLocation']);
+        $query = Inventory::query()->forClinic($context)->with(['product', 'inventoryLocation']);
 
         if (! empty($filters['inventory_location_id'])) $query->where('inventory_location_id', $filters['inventory_location_id']);
         if (! empty($filters['category'])) $query->whereHas('product', fn (Builder $q) => $q->where('category', $filters['category']));

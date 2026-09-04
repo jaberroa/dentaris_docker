@@ -14,6 +14,7 @@ class UpdateInvoiceRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'clinic_id' => ['prohibited'],
             'invoice_date' => ['required', 'date'],
             'due_date' => ['nullable', 'date', 'after_or_equal:invoice_date'],
             'tax_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],

@@ -5,21 +5,22 @@ namespace Tests\Feature;
 use App\Models\CdtCatalog;
 use App\Models\Invoice;
 use App\Models\Patient;
-use App\Models\Role;
 use App\Models\Staff;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\InteractsWithClinicalContext;
 use Tests\TestCase;
 
 class BillingLifecycleTest extends TestCase
 {
     use RefreshDatabase;
+    use InteractsWithClinicalContext;
 
     public function test_user_with_billing_management_permission_sees_the_create_invoice_action(): void
     {
-        [$user] = $this->fixture();
+        [$user, , , $context] = $this->fixture();
 
-        $this->actingAs($user)
+        $this->actingAs($user)->withSession(['clinic_id' => $context->clinicId])
             ->get(route('billing.index'))
             ->assertOk()
             ->assertSee('Nueva factura');
@@ -27,9 +28,9 @@ class BillingLifecycleTest extends TestCase
 
     public function test_authorized_user_can_edit_only_a_draft_invoice_without_payments(): void
     {
-        [$user, $invoice, $catalogItem] = $this->fixture();
+        [$user, $invoice, $catalogItem, $context] = $this->fixture();
 
-        $this->actingAs($user)
+        $this->actingAs($user)->withSession(['clinic_id' => $context->clinicId])
             ->put(route('billing.update', $invoice), [
                 'invoice_date' => '2026-09-02',
                 'due_date' => '2026-09-12',
@@ -67,14 +68,14 @@ class BillingLifecycleTest extends TestCase
 
     public function test_send_and_cancellation_change_state_without_deleting_the_invoice(): void
     {
-        [$user, $invoice] = $this->fixture();
+        [$user, $invoice, , $context] = $this->fixture();
 
-        $this->actingAs($user)
+        $this->actingAs($user)->withSession(['clinic_id' => $context->clinicId])
             ->post(route('billing.send', $invoice))
             ->assertSessionHas('success');
         $this->assertSame('sent', $invoice->fresh()->status);
 
-        $this->actingAs($user)
+        $this->actingAs($user)->withSession(['clinic_id' => $context->clinicId])
             ->delete(route('billing.destroy', $invoice), ['reason' => 'Paciente canceló el tratamiento'])
             ->assertRedirect(route('billing.index'));
 
@@ -88,15 +89,10 @@ class BillingLifecycleTest extends TestCase
 
     private function fixture(): array
     {
-        $user = User::factory()->create();
-        $role = Role::query()->create([
-            'name' => 'billing-'.uniqid(),
-            'display_name' => 'Facturación de prueba',
-            'permissions' => ['manage_billing', 'view_billing'],
-        ]);
-        $user->roles()->attach($role);
+        $user = User::factory()->create(['is_active' => true]);
+        $context = $this->clinicalContextFor($user, ['manage_billing', 'view_billing']);
 
-        $patient = Patient::query()->create([
+        $patient = new Patient([
             'patient_code' => 'PAC-'.uniqid(),
             'first_name' => 'Ana',
             'last_name' => 'Prueba',
@@ -104,18 +100,20 @@ class BillingLifecycleTest extends TestCase
             'gender' => 'female',
             'created_by' => $user->id,
         ]);
-        $staff = Staff::query()->create([
+        $patient->forceFill(['clinic_id' => $context->clinicId])->save();
+        $staff = new Staff([
             'user_id' => $user->id,
             'employee_id' => 'EMP-'.uniqid(),
             'is_active' => true,
         ]);
+        $staff->forceFill(['clinic_id' => $context->clinicId])->save();
         $catalogItem = CdtCatalog::query()->create([
             'cdt_code' => 'D1110-'.uniqid(),
             'category' => 'Preventivo',
             'procedure_name' => 'Profilaxis dental',
             'base_price' => 25,
         ]);
-        $invoice = Invoice::query()->create([
+        $invoice = new Invoice([
             'invoice_number' => 'INV-'.uniqid(),
             'patient_id' => $patient->id,
             'staff_id' => $staff->id,
@@ -124,6 +122,7 @@ class BillingLifecycleTest extends TestCase
             'status' => 'draft',
             'created_by' => $user->id,
         ]);
+        $invoice->forceFill(['clinic_id' => $context->clinicId])->save();
         $invoice->items()->create([
             'cdt_catalog_id' => $catalogItem->id,
             'item_name' => $catalogItem->procedure_name,
@@ -133,6 +132,6 @@ class BillingLifecycleTest extends TestCase
         ]);
         $invoice->calculateTotals();
 
-        return [$user, $invoice, $catalogItem];
+        return [$user, $invoice, $catalogItem, $context];
     }
 }

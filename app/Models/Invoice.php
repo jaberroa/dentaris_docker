@@ -2,6 +2,9 @@
 
 namespace App\Models;
 
+use App\Modules\Clinics\Data\ClinicContext;
+use App\Modules\Clinics\Models\Clinic;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
@@ -126,9 +129,25 @@ class Invoice extends Model
         return $this->status === 'sent';
     }
 
-    public function isEditable(): bool
+    public function clinic()
     {
-        return $this->isDraft() && (! $this->exists || ! $this->payments()->exists());
+        return $this->belongsTo(Clinic::class);
+    }
+
+    public function scopeForClinic(Builder $query, ClinicContext $context): Builder
+    {
+        return $query->where($query->qualifyColumn('clinic_id'), $context->clinicId);
+    }
+
+    public function isEditable(?ClinicContext $context = null): bool
+    {
+        $payments = $this->payments();
+
+        if ($context !== null) {
+            $payments->forClinic($context);
+        }
+
+        return $this->isDraft() && (! $this->exists || ! $payments->exists());
     }
 
     public function getPaymentPercentageAttribute()

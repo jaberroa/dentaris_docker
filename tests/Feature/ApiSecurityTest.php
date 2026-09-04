@@ -9,10 +9,11 @@ use App\Models\User;
 use App\Models\SecurityAuditLog;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
+use Tests\Concerns\InteractsWithClinicalContext;
 
 class ApiSecurityTest extends TestCase
 {
-    use RefreshDatabase, WithFaker;
+    use InteractsWithClinicalContext, RefreshDatabase, WithFaker;
 
     protected $user;
     protected $apiToken;
@@ -29,6 +30,16 @@ class ApiSecurityTest extends TestCase
 
         // Create API token
         $this->apiToken = $this->user->createToken('test-token')->plainTextToken;
+
+        $context = $this->clinicalContextFor($this->user, [
+            'view_patients',
+            'manage_patients',
+        ]);
+
+        // El transporte API conserva la cabecera clínica explícita. El valor
+        // únicamente identifica la clínica solicitada; el middleware valida la
+        // membresía activa antes de autorizar cualquier operación.
+        $this->withHeader('X-Clinic-Id', (string) $context->clinicId);
     }
 
     /** @test */

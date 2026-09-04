@@ -11,6 +11,7 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Models\Inventory;
+use App\Modules\Clinics\Data\ClinicContext;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Carbon\Carbon;
@@ -32,12 +33,22 @@ class DashboardApiController extends Controller
      */
     public function getKpis(Request $request): JsonResponse
     {
+        $context = $request->attributes->get(ClinicContext::class)
+            ?? $request->attributes->get('clinic.context');
+
+        if (! $context instanceof ClinicContext) {
+            return response()->json([
+                'message' => 'El contexto clínico no está disponible.',
+                'code' => 'CLINIC_CONTEXT_UNAVAILABLE',
+            ], 403);
+        }
+
         try {
             $dateFrom = $request->get('date_from', now()->startOfMonth());
             $dateTo = $request->get('date_to', now()->endOfMonth());
 
             // Usar cache para KPIs
-            $kpis = $this->cacheService->getDashboardKpis($dateFrom, $dateTo);
+            $kpis = $this->cacheService->getDashboardKpis($context, $dateFrom, $dateTo);
 
             return $this->successResponse($kpis, 'KPIs retrieved successfully');
         } catch (\Exception $e) {
