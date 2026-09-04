@@ -7,8 +7,8 @@ Esta matriz cruza artefactos presentes en el repositorio. `Pendiente` significa 
 | Dominio | Ruta web/API | Modelos principales | Persistencia identificada | Validación dedicada | Prueba específica |
 |---|---|---|---|---|---|
 | Pacientes | Web + API | `Patient`, `PatientContact`, `PatientDocument`, `PatientInsurance` | `create_patients_table` y relacionadas | `PatientRequest` | Sí: paciente web/API |
-| Citas | Web + API | `Appointment`, `AppointmentStatus`, `AppointmentReminder` | citas, estados, recordatorios y extensiones | Pendiente; hay validación inline | Sí: cita web/API |
-| Historias clínicas | Web | `MedicalRecord`, `MedicalDiagnosis`, `MedicalImage`, `DentalClinicalHistory` | historias, diagnósticos, imágenes y clínica dental | Pendiente | Pendiente |
+| Citas | Web; API histórica no publicada | `Appointment`, `AppointmentStatus`, `AppointmentReminder` | citas, estados, recordatorios y extensiones | `AppointmentRequest` limitado por clínica | Sí: integración clínica web; suite API histórica pendiente de saneamiento |
+| Historias clínicas | Web | `MedicalRecord`, `MedicalDiagnosis`, `MedicalImage`, `DentalClinicalHistory` | historias, diagnósticos, imágenes y clínica dental | `MedicalRecordRequest` con relación cita-paciente-personal | Sí: `ClinicalAppointmentsMedicalRecordsIntegrationTest` |
 | Planes dentales | Web | `TreatmentPlan`, `TreatmentPlanItem`, `DentalTreatmentPlan`, `DentalProcedure`, `DentalOdontogram`, `DentalPeriodontogram` | planes, procedimientos, odontograma y periodontograma | Pendiente | Pendiente |
 | Inventario | Web | `Inventory`, `Product`, `Supplier` | inventario, productos y proveedores | Pendiente | Pendiente |
 | Facturación/pagos | Web | `Invoice`, `InvoiceItem`, `Payment`, `PaymentPlan`, `AccountsReceivable`, `DailyCash` | facturas, pagos, planes y caja | Pendiente | Pendiente |
@@ -20,8 +20,8 @@ Esta matriz cruza artefactos presentes en el repositorio. `Pendiente` significa 
 
 ## Brechas de trazabilidad
 
-1. La mayoría de dominios no tiene un Form Request dedicado, aunque sus controladores realizan validación inline.
-2. La mayoría de dominios no tiene una prueba identificable por nombre, especialmente mutaciones administrativas y datos clínicos sensibles.
+1. La mayoría de dominios no tiene un Form Request dedicado; citas e historias clínicas ya constituyen excepciones verificadas.
+2. La mayoría de dominios no tiene una prueba identificable por nombre; citas, historias, pacientes y personal ya tienen cobertura clínica focalizada.
 3. No hay Repositories ni Policies que permitan cerrar el vínculo entre consulta compleja, autorización y modelo.
 4. La relación entre rutas duplicadas de `web.php`, controladores y permisos debe resolverse antes de extraer módulos.
 

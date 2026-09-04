@@ -7,8 +7,8 @@ Este inventario describe la superficie existente sin afirmar que esté lista par
 | Dominio | Controlador principal | Vistas Blade | Pruebas identificadas | Estado documental |
 |---|---|---:|---|---|
 | Pacientes | `PatientController` | 6 | `PatientTest`, `PatientApiTest` | Existe superficie web y API; falta mapa completo de permisos y servicios |
-| Citas | `AppointmentController` | 7 | `AppointmentTest`, `AppointmentApiTest` | Existe web/API; revisar validación inline y duplicidad de rutas |
-| Historias clínicas | `MedicalRecordController` | 3 | No específica | Requiere contrato de datos sensibles, auditoría y almacenamiento |
+| Citas | `AppointmentController` | 7 | `AppointmentTest`, `AppointmentApiTest`, `ClinicalAppointmentsMedicalRecordsIntegrationTest` | Web integrada a `ClinicContext` con Form Request y aislamiento; el controlador API histórico no tiene rutas publicadas y sus pruebas requieren saneamiento |
+| Historias clínicas | `MedicalRecordController` | 3 | `ClinicalAppointmentsMedicalRecordsIntegrationTest` | Web integrada a `ClinicContext`, Form Request, relaciones cruzadas validadas y actividad auditable; exportación PDF aún no implementada |
 | Planes dentales | `DentalTreatmentPlanController`, `TreatmentPlanController` | 9 combinadas | No específica | Hay dos superficies relacionadas; definir límites y evitar solapamiento |
 | Inventario | `InventoryController`, `ProductController`, `SupplierController` | 3 combinadas | No específica | Validar separación producto/inventario/proveedor y permisos |
 | Facturación y pagos | `BillingController`, `PaymentController`, `PurchaseController`, `QuoteController` | 4 combinadas | No específica | Requiere trazabilidad financiera y pruebas de mutaciones |
