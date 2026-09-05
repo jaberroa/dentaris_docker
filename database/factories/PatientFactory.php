@@ -4,6 +4,8 @@ namespace Database\Factories;
 
 use App\Models\Patient;
 use App\Models\User;
+use App\Modules\Clinics\Data\ClinicContext;
+use App\Modules\Clinics\Models\Clinic;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
@@ -79,8 +81,16 @@ class PatientFactory extends Factory
             'consent_marketing' => $this->faker->boolean(70),
             'consent_data_processing' => $this->faker->boolean(85),
             'is_active' => true,
-            'created_by' => 1, // Usuario por defecto
+            'created_by' => User::factory(),
         ];
+    }
+
+    public function forClinic(ClinicContext|Clinic|int $clinic): static
+    {
+        $clinicId = $clinic instanceof ClinicContext ? $clinic->clinicId
+            : ($clinic instanceof Clinic ? (int) $clinic->getKey() : $clinic);
+
+        return $this->state(fn (array $attributes): array => ['clinic_id' => $clinicId]);
     }
 
     /**

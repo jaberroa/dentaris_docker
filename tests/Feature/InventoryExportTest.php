@@ -50,7 +50,8 @@ class InventoryExportTest extends TestCase
         $context = $this->clinicalContextFor($user, $permissions);
         $location = new InventoryLocation(['code' => 'CONS-01', 'name' => 'Consultorio 1', 'type' => 'clinic', 'is_active' => true]);
         $location->forceFill(['clinic_id' => $context->clinicId])->save();
-        $product = Product::query()->create(['product_code' => 'EXP-'.uniqid(), 'name' => 'Producto exportable', 'category' => 'materiales', 'unit_of_measure' => 'piezas', 'minimum_stock' => 2, 'created_by' => $user->id]);
+        $product = new Product(['product_code' => 'EXP-'.uniqid(), 'name' => 'Producto exportable', 'category' => 'materiales', 'unit_of_measure' => 'piezas', 'minimum_stock' => 2, 'created_by' => $user->id]);
+        $product->forceFill(['clinic_id' => $context->clinicId])->save();
         $inventory = new Inventory(['product_id' => $product->id, 'inventory_location_id' => $location->id, 'current_stock' => 5, 'available_stock' => 5, 'average_cost' => 4.50, 'location' => $location->name]);
         $inventory->forceFill(['clinic_id' => $context->clinicId])->save();
 

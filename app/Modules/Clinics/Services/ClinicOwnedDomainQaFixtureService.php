@@ -33,6 +33,7 @@ final class ClinicOwnedDomainQaFixtureService
                 'inventory' => $this->readiness->isReady('inventory'),
                 'billing' => $this->readiness->isReady('billing'),
                 'procurement' => $this->readiness->isReady('procurement'),
+                'quotes' => $this->readiness->isReady('quotes'),
             ],
             'visual_permissions' => $visualPermissions,
             'planned_markers' => [
@@ -41,8 +42,9 @@ final class ClinicOwnedDomainQaFixtureService
                 'payments' => 'QA14A-Y{clinic_id}-001..'.str_pad((string) $count, 3, '0', STR_PAD_LEFT),
             ],
             'blocked_surfaces' => [
-                'suppliers' => 'No clinic_id contract exists.',
-                'purchases' => 'No clinic_id contract exists.',
+                'suppliers' => 'Ownership exists; legacy controller and views are not yet safe to publish.',
+                'purchases' => 'Ownership exists; legacy controller and views are not yet safe to publish.',
+                'quotes' => 'Ownership exists; legacy schema/controller mismatch is not yet safe to publish.',
             ],
         ];
     }
@@ -118,7 +120,7 @@ final class ClinicOwnedDomainQaFixtureService
                 ],
                 'hashes_before' => $before['hashes'],
                 'hashes_after' => $after['hashes'],
-                'blocked_surfaces' => ['suppliers', 'purchases'],
+                'blocked_surfaces' => ['suppliers', 'purchases', 'quotes'],
             ];
 
             activity('qa')
@@ -248,14 +250,16 @@ final class ClinicOwnedDomainQaFixtureService
     private function product(int $clinicId, int $actorId, string $suffix, mixed $now, array &$created, array &$ids): int
     {
         $code = "QA14A-P{$clinicId}-{$suffix}";
-        $existing = $this->connection->table('products')->where('product_code', $code)->first(['id']);
+        $existing = $this->connection->table('products')->where('product_code', $code)->first(['id', 'clinic_id']);
         if ($existing !== null) {
+            $this->assertOwner('products', (int) $existing->id, $existing->clinic_id, $clinicId);
             $ids['products'][] = (int) $existing->id;
 
             return (int) $existing->id;
         }
 
         $id = $this->connection->table('products')->insertGetId([
+            'clinic_id' => $clinicId,
             'product_code' => $code,
             'name' => "QA/PRUEBA 14A Insumo {$suffix}",
             'description' => 'QA/PRUEBA: producto técnico para validación visual.',

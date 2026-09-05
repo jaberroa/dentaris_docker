@@ -5,17 +5,23 @@ namespace Tests\Feature;
 use Tests\TestCase;
 use App\Models\Patient;
 use App\Models\User;
+use App\Modules\Clinics\Data\ClinicContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Tests\Concerns\InteractsWithClinicalContext;
 
 class PatientApiTest extends TestCase
 {
+    use InteractsWithClinicalContext;
     use RefreshDatabase;
+
+    private ClinicContext $clinicContext;
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->user = User::factory()->create();
+        $this->user = User::factory()->create(['is_active' => true]);
+        $this->clinicContext = $this->clinicalContextFor($this->user, ['view_patients', 'manage_patients']);
     }
 
     /**
@@ -28,13 +34,14 @@ class PatientApiTest extends TestCase
         return [
             'Authorization' => 'Bearer ' . $token,
             'Accept' => 'application/json',
+            'X-Clinic-Id' => (string) $this->clinicContext->clinicId,
         ];
     }
 
     /** @test */
     public function it_can_get_patients_api_with_authentication()
     {
-        Patient::factory(5)->create(['created_by' => $this->user->id]);
+        Patient::factory(5)->forClinic($this->clinicContext)->create(['created_by' => $this->user->id]);
 
         $response = $this->withHeaders($this->authHeaders())
             ->getJson('/api/patients');
@@ -76,14 +83,14 @@ class PatientApiTest extends TestCase
     /** @test */
     public function it_can_search_patients_api()
     {
-        Patient::factory()->create([
+        Patient::factory()->forClinic($this->clinicContext)->create([
             'first_name' => 'Juan',
             'last_name' => 'Pérez',
             'email' => 'juan@example.com',
             'created_by' => $this->user->id,
         ]);
 
-        Patient::factory()->create([
+        Patient::factory()->forClinic($this->clinicContext)->create([
             'first_name' => 'María',
             'last_name' => 'García',
             'email' => 'maria@example.com',
@@ -101,13 +108,13 @@ class PatientApiTest extends TestCase
     /** @test */
     public function it_can_filter_patients_by_gender_api()
     {
-        Patient::factory()->create([
+        Patient::factory()->forClinic($this->clinicContext)->create([
             'first_name' => 'Juan',
             'gender' => 'male',
             'created_by' => $this->user->id,
         ]);
 
-        Patient::factory()->create([
+        Patient::factory()->forClinic($this->clinicContext)->create([
             'first_name' => 'María',
             'gender' => 'female',
             'created_by' => $this->user->id,
@@ -124,13 +131,13 @@ class PatientApiTest extends TestCase
     /** @test */
     public function it_can_filter_patients_by_age_range_api()
     {
-        Patient::factory()->create([
+        Patient::factory()->forClinic($this->clinicContext)->create([
             'first_name' => 'Juan',
             'birth_date' => now()->subYears(25)->format('Y-m-d'),
             'created_by' => $this->user->id,
         ]);
 
-        Patient::factory()->create([
+        Patient::factory()->forClinic($this->clinicContext)->create([
             'first_name' => 'María',
             'birth_date' => now()->subYears(65)->format('Y-m-d'),
             'created_by' => $this->user->id,
@@ -147,13 +154,13 @@ class PatientApiTest extends TestCase
     /** @test */
     public function it_can_filter_patients_by_allergies_api()
     {
-        Patient::factory()->create([
+        Patient::factory()->forClinic($this->clinicContext)->create([
             'first_name' => 'Juan',
             'allergies' => 'Penicilina',
             'created_by' => $this->user->id,
         ]);
 
-        Patient::factory()->create([
+        Patient::factory()->forClinic($this->clinicContext)->create([
             'first_name' => 'María',
             'allergies' => null,
             'created_by' => $this->user->id,
@@ -170,13 +177,13 @@ class PatientApiTest extends TestCase
     /** @test */
     public function it_can_filter_patients_by_marketing_consent_api()
     {
-        Patient::factory()->create([
+        Patient::factory()->forClinic($this->clinicContext)->create([
             'first_name' => 'Juan',
             'consent_marketing' => true,
             'created_by' => $this->user->id,
         ]);
 
-        Patient::factory()->create([
+        Patient::factory()->forClinic($this->clinicContext)->create([
             'first_name' => 'María',
             'consent_marketing' => false,
             'created_by' => $this->user->id,
@@ -193,13 +200,13 @@ class PatientApiTest extends TestCase
     /** @test */
     public function it_can_filter_patients_by_date_range_api()
     {
-        Patient::factory()->create([
+        Patient::factory()->forClinic($this->clinicContext)->create([
             'first_name' => 'Juan',
             'created_at' => now()->subDays(5),
             'created_by' => $this->user->id,
         ]);
 
-        Patient::factory()->create([
+        Patient::factory()->forClinic($this->clinicContext)->create([
             'first_name' => 'María',
             'created_at' => now()->subDays(10),
             'created_by' => $this->user->id,
@@ -216,7 +223,7 @@ class PatientApiTest extends TestCase
     /** @test */
     public function it_can_handle_pagination_api()
     {
-        Patient::factory(25)->create(['created_by' => $this->user->id]);
+        Patient::factory(25)->forClinic($this->clinicContext)->create(['created_by' => $this->user->id]);
 
         $response = $this->withHeaders($this->authHeaders())
             ->getJson('/api/patients?per_page=10&page=1');
@@ -231,7 +238,7 @@ class PatientApiTest extends TestCase
     /** @test */
     public function it_can_get_patient_details_api()
     {
-        $patient = Patient::factory()->create([
+        $patient = Patient::factory()->forClinic($this->clinicContext)->create([
             'first_name' => 'Juan',
             'last_name' => 'Pérez',
             'email' => 'juan@example.com',
@@ -315,7 +322,7 @@ class PatientApiTest extends TestCase
     /** @test */
     public function it_validates_email_uniqueness_when_creating_patient_via_api()
     {
-        Patient::factory()->create([
+        Patient::factory()->forClinic($this->clinicContext)->create([
             'email' => 'juan@example.com',
             'created_by' => $this->user->id,
         ]);
@@ -339,7 +346,7 @@ class PatientApiTest extends TestCase
     /** @test */
     public function it_can_update_patient_via_api()
     {
-        $patient = Patient::factory()->create(['created_by' => $this->user->id]);
+        $patient = Patient::factory()->forClinic($this->clinicContext)->create(['created_by' => $this->user->id]);
 
         $updateData = [
             'first_name' => 'Juan Carlos',
@@ -382,7 +389,7 @@ class PatientApiTest extends TestCase
     /** @test */
     public function it_can_delete_patient_via_api()
     {
-        $patient = Patient::factory()->create(['created_by' => $this->user->id]);
+        $patient = Patient::factory()->forClinic($this->clinicContext)->create(['created_by' => $this->user->id]);
 
         $response = $this->withHeaders($this->authHeaders())
             ->deleteJson("/api/patients/{$patient->id}");
@@ -424,7 +431,7 @@ class PatientApiTest extends TestCase
     /** @test */
     public function it_can_handle_empty_search_results_api()
     {
-        Patient::factory()->create([
+        Patient::factory()->forClinic($this->clinicContext)->create([
             'first_name' => 'Juan',
             'created_by' => $this->user->id,
         ]);
@@ -439,14 +446,14 @@ class PatientApiTest extends TestCase
     /** @test */
     public function it_can_handle_combined_filters_api()
     {
-        Patient::factory()->create([
+        Patient::factory()->forClinic($this->clinicContext)->create([
             'first_name' => 'Juan',
             'gender' => 'male',
             'consent_marketing' => true,
             'created_by' => $this->user->id,
         ]);
 
-        Patient::factory()->create([
+        Patient::factory()->forClinic($this->clinicContext)->create([
             'first_name' => 'María',
             'gender' => 'female',
             'consent_marketing' => false,
@@ -464,7 +471,7 @@ class PatientApiTest extends TestCase
     /** @test */
     public function it_can_handle_invalid_pagination_parameters_api()
     {
-        Patient::factory(5)->create(['created_by' => $this->user->id]);
+        Patient::factory(5)->forClinic($this->clinicContext)->create(['created_by' => $this->user->id]);
 
         $response = $this->withHeaders($this->authHeaders())
             ->getJson('/api/patients?per_page=invalid&page=invalid');
@@ -478,7 +485,7 @@ class PatientApiTest extends TestCase
     /** @test */
     public function it_can_handle_large_datasets_api()
     {
-        Patient::factory(100)->create(['created_by' => $this->user->id]);
+        Patient::factory(100)->forClinic($this->clinicContext)->create(['created_by' => $this->user->id]);
 
         $response = $this->withHeaders($this->authHeaders())
             ->getJson('/api/patients?per_page=50');
@@ -492,7 +499,7 @@ class PatientApiTest extends TestCase
     /** @test */
     public function it_returns_correct_json_structure_for_patient_resource()
     {
-        $patient = Patient::factory()->create([
+        $patient = Patient::factory()->forClinic($this->clinicContext)->create([
             'first_name' => 'Juan',
             'last_name' => 'Pérez',
             'email' => 'juan@example.com',

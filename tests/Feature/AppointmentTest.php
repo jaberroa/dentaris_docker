@@ -8,24 +8,30 @@ use App\Models\Patient;
 use App\Models\Staff;
 use App\Models\User;
 use App\Models\AppointmentStatus;
+use App\Modules\Clinics\Data\ClinicContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Carbon\Carbon;
+use Tests\Concerns\InteractsWithClinicalContext;
 
 class AppointmentTest extends TestCase
 {
+    use InteractsWithClinicalContext;
     use RefreshDatabase;
+
+    private ClinicContext $clinicContext;
 
     protected function setUp(): void
     {
         parent::setUp();
         
         // Crear usuario autenticado
-        $this->user = User::factory()->create();
-        $this->actingAs($this->user);
+        $this->user = User::factory()->create(['is_active' => true]);
+        $this->clinicContext = $this->clinicalContextFor($this->user, ['view_appointments', 'manage_appointments']);
+        $this->actingAs($this->user)->withSession(['clinic_id' => $this->clinicContext->clinicId]);
         
         // Crear datos de prueba necesarios
-        $this->patient = Patient::factory()->create();
-        $this->staff = Staff::factory()->create();
+        $this->patient = Patient::factory()->forClinic($this->clinicContext)->create(['created_by' => $this->user->id]);
+        $this->staff = Staff::factory()->forClinic($this->clinicContext)->create();
         $this->status = AppointmentStatus::factory()->create(['name' => 'scheduled']);
     }
 

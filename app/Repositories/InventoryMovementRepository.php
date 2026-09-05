@@ -10,7 +10,15 @@ class InventoryMovementRepository
 {
     public function query(ClinicContext $context): Builder
     {
-        return InventoryMovement::query()->forClinic($context)->with(['inventory', 'product', 'user']);
+        return InventoryMovement::query()
+            ->forClinic($context)
+            ->whereHas('inventory', fn (Builder $query) => $query->forClinic($context))
+            ->whereHas('product', fn (Builder $query) => $query->forClinic($context))
+            ->with([
+                'inventory' => fn ($query) => $query->forClinic($context),
+                'product' => fn ($query) => $query->forClinic($context),
+                'user',
+            ]);
     }
 
     public function forInventory(int $inventoryId, ClinicContext $context): Builder

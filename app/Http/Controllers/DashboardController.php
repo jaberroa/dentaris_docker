@@ -199,20 +199,21 @@ class DashboardController extends Controller
         return [
             'total_products' => Inventory::forClinic($context)->distinct()->count('product_id'),
             'low_stock' => Inventory::forClinic($context)->with('product')
-                ->whereHas('product', function($query) {
-                    $query->where('is_active', true);
+                ->whereHas('product', function($query) use ($context) {
+                    $query->forClinic($context)->where('is_active', true);
                 })
                 ->whereRaw('available_stock <= (SELECT minimum_stock FROM products WHERE products.id = inventory.product_id)')
                 ->count(),
             'out_of_stock' => Inventory::forClinic($context)->where('available_stock', 0)->count(),
             'total_value' => Inventory::forClinic($context)->join('products', 'inventory.product_id', '=', 'products.id')
+                ->where('products.clinic_id', $context->clinicId)
                 ->where('products.is_active', true)
                 ->sum(DB::raw('inventory.current_stock * inventory.average_cost')),
-            'expiring_soon' => Product::whereHas('inventories', fn ($query) => $query->forClinic($context))
+            'expiring_soon' => Product::forClinic($context)->whereHas('inventories', fn ($query) => $query->forClinic($context))
                 ->where('expiry_date', '<=', Carbon::now()->addDays(30))
                 ->where('expiry_date', '>', Carbon::now())
                 ->count(),
-            'expired' => Product::whereHas('inventories', fn ($query) => $query->forClinic($context))
+            'expired' => Product::forClinic($context)->whereHas('inventories', fn ($query) => $query->forClinic($context))
                 ->where('expiry_date', '<', Carbon::now())->count(),
         ];
     }
@@ -331,6 +332,7 @@ class DashboardController extends Controller
         // Productos por categoría
         $productsByCategory = $inventoryReady
             ? Product::query()
+                ->forClinic($context)
                 ->join('inventory', 'inventory.product_id', '=', 'products.id')
                 ->where('inventory.clinic_id', $context->clinicId)
                 ->where('products.is_active', true)
@@ -355,7 +357,7 @@ class DashboardController extends Controller
             return collect();
         }
 
-        return Product::with(['inventories' => fn ($query) => $query->forClinic($context)])
+        return Product::forClinic($context)->with(['inventories' => fn ($query) => $query->forClinic($context)])
             ->where('is_active', true)
             ->whereHas('inventories', function($query) use ($context) {
                 $query->forClinic($context)

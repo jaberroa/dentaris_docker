@@ -102,7 +102,7 @@ class InventoryTransferTest extends TestCase
         $user = User::factory()->create(['is_active' => true]);
         $context = $this->clinicalContextFor($user, ['manage_inventory']);
 
-        $product = Product::query()->create([
+        $product = new Product([
             'product_code' => 'TRANSFER-'.uniqid(),
             'name' => 'Material transferible',
             'category' => 'materiales',
@@ -110,6 +110,7 @@ class InventoryTransferTest extends TestCase
             'minimum_stock' => 1,
             'created_by' => $user->id,
         ]);
+        $product->forceFill(['clinic_id' => $context->clinicId])->save();
         $source = new Inventory([
             'product_id' => $product->id,
             'current_stock' => 10,

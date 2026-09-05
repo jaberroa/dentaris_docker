@@ -129,7 +129,7 @@ class InventoryLocationManagementTest extends TestCase
 
     private function inventory(User $user, int $clinicId): Inventory
     {
-        $product = Product::query()->create([
+        $product = new Product([
             'product_code' => 'LOCATION-'.uniqid(),
             'name' => 'Producto de ubicación',
             'category' => 'materiales',
@@ -137,6 +137,7 @@ class InventoryLocationManagementTest extends TestCase
             'minimum_stock' => 1,
             'created_by' => $user->id,
         ]);
+        $product->forceFill(['clinic_id' => $clinicId])->save();
 
         $inventory = new Inventory([
             'product_id' => $product->id,

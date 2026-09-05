@@ -7,6 +7,8 @@ use App\Models\Patient;
 use App\Models\Staff;
 use App\Models\User;
 use App\Models\AppointmentStatus;
+use App\Modules\Clinics\Data\ClinicContext;
+use App\Modules\Clinics\Models\Clinic;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Carbon\Carbon;
 
@@ -106,6 +108,17 @@ class AppointmentFactory extends Factory
             'cancellation_reason' => null, // Will be set in cancelled state
             'created_by' => User::factory(),
         ];
+    }
+
+    public function forClinic(ClinicContext|Clinic|int $clinic): static
+    {
+        $clinicId = $clinic instanceof ClinicContext ? $clinic->clinicId
+            : ($clinic instanceof Clinic ? (int) $clinic->getKey() : $clinic);
+
+        return $this->state(fn (array $attributes): array => [
+            'patient_id' => Patient::factory()->forClinic($clinicId),
+            'staff_id' => Staff::factory()->forClinic($clinicId),
+        ]);
     }
 
     /**

@@ -11,6 +11,7 @@ use App\Models\Payment;
 use App\Models\Product;
 use App\Models\Role;
 use App\Models\Staff;
+use App\Models\Supplier;
 use App\Models\User;
 use App\Modules\Clinics\Data\ClinicContext;
 use App\Services\CacheService;
@@ -199,6 +200,30 @@ class InventoryBillingClinicalIsolationTest extends TestCase
         $this->assertSame(1, $clinicB['out_of_stock_count']);
     }
 
+    public function test_inventory_does_not_eager_load_a_primary_supplier_from_another_clinic(): void
+    {
+        $fixture = $this->fixture();
+        $foreignSupplier = new Supplier([
+            'supplier_code' => 'ISO-SUP-B-'.uniqid(),
+            'company_name' => 'Proveedor ajeno no divulgable',
+            'created_by' => $fixture['user']->id,
+            'is_active' => true,
+        ]);
+        $foreignSupplier->forceFill(['clinic_id' => $fixture['context_b']->clinicId])->save();
+        $fixture['inventory_a']->product->forceFill(['primary_supplier_id' => $foreignSupplier->id])->save();
+
+        $this->actingAs($fixture['user'])->withSession(['clinic_id' => $fixture['context_a']->clinicId])
+            ->get(route('inventory.index'))
+            ->assertOk()
+            ->assertViewHas('inventories', function ($inventories): bool {
+                $inventory = $inventories->first();
+
+                return $inventory !== null
+                    && $inventory->product !== null
+                    && $inventory->product->primarySupplier === null;
+            });
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -277,7 +302,7 @@ class InventoryBillingClinicalIsolationTest extends TestCase
         ]);
         $location->forceFill(['clinic_id' => $context->clinicId])->save();
 
-        $product = Product::query()->create([
+        $product = new Product([
             'product_code' => 'ISO-PROD-'.$suffix.'-'.uniqid(),
             'name' => 'Material clínica '.$suffix,
             'category' => 'materiales',
@@ -286,6 +311,7 @@ class InventoryBillingClinicalIsolationTest extends TestCase
             'created_by' => $user->id,
             'is_active' => true,
         ]);
+        $product->forceFill(['clinic_id' => $context->clinicId])->save();
 
         $inventory = new Inventory([
             'product_id' => $product->id,

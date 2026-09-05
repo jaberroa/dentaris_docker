@@ -5,25 +5,31 @@ namespace Tests\Feature;
 use Tests\TestCase;
 use App\Models\Patient;
 use App\Models\User;
+use App\Modules\Clinics\Data\ClinicContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Tests\Concerns\InteractsWithClinicalContext;
 
 class PatientTest extends TestCase
 {
+    use InteractsWithClinicalContext;
     use RefreshDatabase;
+
+    private ClinicContext $clinicContext;
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->user = User::factory()->create();
-        $this->actingAs($this->user);
+        $this->user = User::factory()->create(['is_active' => true]);
+        $this->clinicContext = $this->clinicalContextFor($this->user, ['view_patients', 'manage_patients']);
+        $this->actingAs($this->user)->withSession(['clinic_id' => $this->clinicContext->clinicId]);
     }
 
     /** @test */
     public function it_can_view_patients_index()
     {
-        Patient::factory(5)->create(['created_by' => $this->user->id]);
+        Patient::factory(5)->forClinic($this->clinicContext)->create(['created_by' => $this->user->id]);
 
         $response = $this->get(route('patients.index'));
 
@@ -102,7 +108,7 @@ class PatientTest extends TestCase
     /** @test */
     public function it_validates_email_uniqueness_when_creating_patient()
     {
-        Patient::factory()->create([
+        Patient::factory()->forClinic($this->clinicContext)->create([
             'email' => 'juan@example.com',
             'created_by' => $this->user->id,
         ]);
@@ -140,7 +146,7 @@ class PatientTest extends TestCase
     /** @test */
     public function it_can_view_patient_details()
     {
-        $patient = Patient::factory()->create(['created_by' => $this->user->id]);
+        $patient = Patient::factory()->forClinic($this->clinicContext)->create(['created_by' => $this->user->id]);
 
         $response = $this->get(route('patients.show', $patient));
 
@@ -153,7 +159,7 @@ class PatientTest extends TestCase
     /** @test */
     public function it_can_view_edit_patient_form()
     {
-        $patient = Patient::factory()->create(['created_by' => $this->user->id]);
+        $patient = Patient::factory()->forClinic($this->clinicContext)->create(['created_by' => $this->user->id]);
 
         $response = $this->get(route('patients.edit', $patient));
 
@@ -165,7 +171,7 @@ class PatientTest extends TestCase
     /** @test */
     public function it_can_update_a_patient()
     {
-        $patient = Patient::factory()->create(['created_by' => $this->user->id]);
+        $patient = Patient::factory()->forClinic($this->clinicContext)->create(['created_by' => $this->user->id]);
 
         $updateData = [
             'first_name' => 'Juan Carlos',
@@ -212,7 +218,7 @@ class PatientTest extends TestCase
     /** @test */
     public function it_can_delete_a_patient()
     {
-        $patient = Patient::factory()->create(['created_by' => $this->user->id]);
+        $patient = Patient::factory()->forClinic($this->clinicContext)->create(['created_by' => $this->user->id]);
 
         $response = $this->delete(route('patients.destroy', $patient));
 
@@ -227,7 +233,7 @@ class PatientTest extends TestCase
     /** @test */
     public function it_cannot_delete_patient_with_appointments()
     {
-        $patient = Patient::factory()->create(['created_by' => $this->user->id]);
+        $patient = Patient::factory()->forClinic($this->clinicContext)->create(['created_by' => $this->user->id]);
         
         // Simular que el paciente tiene citas (esto requeriría crear el modelo Appointment)
         // Por ahora, solo verificamos que la validación existe en el controlador
@@ -241,14 +247,14 @@ class PatientTest extends TestCase
     /** @test */
     public function it_can_search_patients()
     {
-        Patient::factory()->create([
+        Patient::factory()->forClinic($this->clinicContext)->create([
             'first_name' => 'Juan',
             'last_name' => 'Pérez',
             'email' => 'juan@example.com',
             'created_by' => $this->user->id,
         ]);
 
-        Patient::factory()->create([
+        Patient::factory()->forClinic($this->clinicContext)->create([
             'first_name' => 'María',
             'last_name' => 'García',
             'email' => 'maria@example.com',
@@ -265,14 +271,14 @@ class PatientTest extends TestCase
     /** @test */
     public function it_can_filter_patients_by_gender()
     {
-        Patient::factory()->create([
+        Patient::factory()->forClinic($this->clinicContext)->create([
             'first_name' => 'Juan',
             'last_name' => 'Pérez',
             'gender' => 'male',
             'created_by' => $this->user->id,
         ]);
 
-        Patient::factory()->create([
+        Patient::factory()->forClinic($this->clinicContext)->create([
             'first_name' => 'María',
             'last_name' => 'García',
             'gender' => 'female',
@@ -289,14 +295,14 @@ class PatientTest extends TestCase
     /** @test */
     public function it_can_filter_patients_by_age_range()
     {
-        Patient::factory()->create([
+        Patient::factory()->forClinic($this->clinicContext)->create([
             'first_name' => 'Juan',
             'last_name' => 'Pérez',
             'birth_date' => now()->subYears(25)->format('Y-m-d'),
             'created_by' => $this->user->id,
         ]);
 
-        Patient::factory()->create([
+        Patient::factory()->forClinic($this->clinicContext)->create([
             'first_name' => 'María',
             'last_name' => 'García',
             'birth_date' => now()->subYears(65)->format('Y-m-d'),
@@ -313,14 +319,14 @@ class PatientTest extends TestCase
     /** @test */
     public function it_can_sort_patients_by_different_fields()
     {
-        Patient::factory()->create([
+        Patient::factory()->forClinic($this->clinicContext)->create([
             'first_name' => 'Ana',
             'last_name' => 'Zapata',
             'created_at' => now()->subDays(2),
             'created_by' => $this->user->id,
         ]);
 
-        Patient::factory()->create([
+        Patient::factory()->forClinic($this->clinicContext)->create([
             'first_name' => 'Zoe',
             'last_name' => 'Alvarez',
             'created_at' => now()->subDays(1),
@@ -336,7 +342,7 @@ class PatientTest extends TestCase
     /** @test */
     public function it_can_change_per_page_pagination()
     {
-        Patient::factory(15)->create(['created_by' => $this->user->id]);
+        Patient::factory(15)->forClinic($this->clinicContext)->create(['created_by' => $this->user->id]);
 
         $response = $this->get(route('patients.index', ['per_page' => '5']));
 
@@ -347,7 +353,7 @@ class PatientTest extends TestCase
     /** @test */
     public function it_can_export_patients_to_excel()
     {
-        Patient::factory(5)->create(['created_by' => $this->user->id]);
+        Patient::factory(5)->forClinic($this->clinicContext)->create(['created_by' => $this->user->id]);
 
         $response = $this->get(route('patients.export.excel'));
 
@@ -358,7 +364,7 @@ class PatientTest extends TestCase
     /** @test */
     public function it_can_export_patients_to_pdf()
     {
-        Patient::factory(5)->create(['created_by' => $this->user->id]);
+        Patient::factory(5)->forClinic($this->clinicContext)->create(['created_by' => $this->user->id]);
 
         $response = $this->get(route('patients.export.pdf'));
 
@@ -369,7 +375,7 @@ class PatientTest extends TestCase
     /** @test */
     public function it_can_export_patient_history()
     {
-        $patient = Patient::factory()->create(['created_by' => $this->user->id]);
+        $patient = Patient::factory()->forClinic($this->clinicContext)->create(['created_by' => $this->user->id]);
 
         $response = $this->get(route('patients.export.history', $patient));
 
@@ -421,7 +427,7 @@ class PatientTest extends TestCase
     /** @test */
     public function it_can_handle_search_with_no_results()
     {
-        Patient::factory()->create([
+        Patient::factory()->forClinic($this->clinicContext)->create([
             'first_name' => 'Juan',
             'created_by' => $this->user->id,
         ]);
@@ -435,13 +441,13 @@ class PatientTest extends TestCase
     /** @test */
     public function it_can_handle_date_range_filters()
     {
-        Patient::factory()->create([
+        Patient::factory()->forClinic($this->clinicContext)->create([
             'first_name' => 'Juan',
             'created_at' => now()->subDays(5),
             'created_by' => $this->user->id,
         ]);
 
-        Patient::factory()->create([
+        Patient::factory()->forClinic($this->clinicContext)->create([
             'first_name' => 'María',
             'created_at' => now()->subDays(10),
             'created_by' => $this->user->id,
@@ -460,13 +466,13 @@ class PatientTest extends TestCase
     /** @test */
     public function it_can_handle_boolean_filters()
     {
-        Patient::factory()->create([
+        Patient::factory()->forClinic($this->clinicContext)->create([
             'first_name' => 'Juan',
             'consent_marketing' => true,
             'created_by' => $this->user->id,
         ]);
 
-        Patient::factory()->create([
+        Patient::factory()->forClinic($this->clinicContext)->create([
             'first_name' => 'María',
             'consent_marketing' => false,
             'created_by' => $this->user->id,

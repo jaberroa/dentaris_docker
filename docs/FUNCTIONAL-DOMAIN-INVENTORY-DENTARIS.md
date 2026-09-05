@@ -2,7 +2,7 @@
 
 Fecha de revisión: 2026-09-05.
 
-Este inventario describe la superficie existente sin afirmar que esté lista para producción. Los estados reflejan evidencia acumulada hasta el Mandato 14B de la Fase 1.
+Este inventario describe la superficie existente sin afirmar que esté lista para producción. Los estados reflejan evidencia acumulada hasta el Mandato 14C de la Fase 1.
 
 | Dominio | Controlador principal | Vistas Blade | Pruebas identificadas | Estado documental |
 |---|---|---:|---|---|
@@ -10,7 +10,7 @@ Este inventario describe la superficie existente sin afirmar que esté lista par
 | Citas | `AppointmentController` | 7 | `AppointmentTest`, `AppointmentApiTest`, `ClinicalAppointmentsMedicalRecordsIntegrationTest` | Web integrada a `ClinicContext` con Form Request y aislamiento; el controlador API histórico no tiene rutas publicadas y sus pruebas requieren saneamiento |
 | Historias clínicas | `MedicalRecordController` | 3 | `ClinicalAppointmentsMedicalRecordsIntegrationTest` | Web integrada a `ClinicContext`, Form Request, relaciones cruzadas validadas y actividad auditable; exportación PDF aún no implementada |
 | Planes dentales | `DentalTreatmentPlanController`, `TreatmentPlanController` | 9 combinadas | No específica | Hay dos superficies relacionadas; definir límites y evitar solapamiento |
-| Inventario | `InventoryController`, `InventoryLocationController`; `ProductController` y `SupplierController` heredados | 6 identificadas, incluida una parcial | `InventoryBillingClinicalIsolationTest`, `ClinicOwnedDomainTransitionTest` y 7 suites HTTP/servicio históricas | Contexto, permisos, consultas, movimientos, exportación y caché aislados; migración y transición 14B verificadas, con 5 registros QA visibles |
+| Inventario | `InventoryController`, `InventoryLocationController`; `ProductController` y `SupplierController` heredados | 6 identificadas, incluida una parcial | `InventoryBillingClinicalIsolationTest`, transiciones clínicas y 7 suites HTTP/servicio históricas | Contexto, permisos, consultas, movimientos, exportación y caché aislados; `products` ya tiene propietario clínico y conserva 5 registros QA visibles |
 | Facturación y pagos | `BillingController`, `PaymentController`; `PurchaseController` y `QuoteController` heredados | 6 identificadas | `BillingLifecycleTest`, `InventoryBillingClinicalIsolationTest`, `ClinicOwnedDomainQaFixtureTest` | Facturas/pagos aislados; permisos clínicos habilitados y 5 facturas + 5 pagos QA idempotentes |
 | Laboratorio | `LabController`, `LabWorkController` | 1 | No específica | Revisar alcance entre laboratorio y trabajos de laboratorio |
 | Personal y usuarios | `StaffController`, `UserController`, `ProfileController` | 7 combinadas | Seguridad general | Validar roles, permisos y datos personales |
@@ -26,7 +26,7 @@ Este inventario describe la superficie existente sin afirmar que esté lista par
 - La siguiente revisión debe cruzar cada fila con rutas concretas, modelos, migraciones, Form Requests, permisos, servicios y consultas.
 - El selector clínico web solo expone membresías activas y activadas de usuarios y clínicas activos; el valor persistido en sesión se revalida en cada solicitud.
 - Inventario, facturación y pagos tienen `clinic_id` nullable desplegado y datos QA íntegros para `DEN-CL-001`; continúan fallando cerrados si aparece una fila nula o inconsistente.
-- Proveedores y compras ahora fallan cerrados mediante el dominio `procurement`; no se consideran globales ni se abren hasta definir propiedad clínica para proveedores, productos y compras.
+- Proveedores, productos, compras y cotizaciones tienen propiedad clínica nullable desde el Mandato 14C. Proveedores/compras y cotizaciones siguen cerrados mediante `procurement` y `quotes` hasta reconstruir controladores, validación y vistas heredadas.
 
 ## Criterios de aceptación
 
@@ -35,11 +35,11 @@ Este inventario describe la superficie existente sin afirmar que esté lista par
 3. Las vistas sensibles no exponen documentos clínicos desde almacenamiento público.
 4. Los controladores respaldados o duplicados tienen decisión explícita y no se eliminan durante el inventario.
 
-## Restricciones verificadas hasta el Mandato 14B
+## Restricciones verificadas hasta el Mandato 14C
 
 - `ProductController` y la conversión de cotización a factura permanecen como superficies heredadas no publicadas; no se habilitaron ni se usaron como vía alternativa.
 - Algunas rutas secundarias de inventario/reportes y las acciones visuales de pago no tienen todas sus vistas Blade. Deben auditarse antes de exponerlas en navegación.
-- La migración `2026_09_03_000000_add_clinic_ownership_to_inventory_and_billing_tables.php` fue aplicada de forma autorizada y conserva columnas nullable; proveedores/compras requieren un contrato separado.
+- Las migraciones de propiedad de los Mandatos 14B y 14C fueron aplicadas de forma autorizada y conservan columnas nullable. La existencia de propiedad no autoriza abrir las superficies heredadas.
 
 ## Evidencia del Mandato 14A
 
@@ -55,3 +55,10 @@ Este inventario describe la superficie existente sin afirmar que esté lista par
 - El rol clínico recibió `view_payments` y `manage_payments` de forma trazable, sin crear una autoridad global.
 - La primera carga creó cinco registros `QA/PRUEBA` por vista de inventario, facturación y pagos; la segunda creó cero y conservó los IDs.
 - La evidencia detallada está en `PHASE-1-MANDATE-14B-DATA-ENABLEMENT-AND-VISUAL-VALIDATION-DENTARIS.md`.
+
+## Seguimiento del Mandato 14C
+
+- Se añadieron `clinic_id` nullable, FKs `RESTRICT`, índices, scopes y Policies para proveedores, productos, compras y cotizaciones.
+- La transición basada en evidencia asignó cinco productos QA a `DEN-CL-001`, actualizó cero filas en la segunda ejecución y conservó hashes/timestamps.
+- Las suites de clínicas, inventario, facturación y pacientes acumulan 169 pruebas verdes; la regresión global mejoró a 294 aprobadas y 74 fallidas.
+- Proveedores, compras y cotizaciones continúan en `503`; la evidencia detallada está en `PHASE-1-MANDATE-14C-PROCUREMENT-QUOTE-OWNERSHIP-AND-REGRESSION-DENTARIS.md`.

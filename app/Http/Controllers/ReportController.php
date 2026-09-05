@@ -259,6 +259,7 @@ class ReportController extends Controller
     private function getProductsByCategory(ClinicContext $context)
     {
         return Product::query()
+            ->forClinic($context)
             ->join('inventory', 'inventory.product_id', '=', 'products.id')
             ->where('inventory.clinic_id', $context->clinicId)
             ->select('products.category', DB::raw('count(distinct products.id) as count'))
@@ -269,7 +270,7 @@ class ReportController extends Controller
 
     private function getLowStockProducts(ClinicContext $context)
     {
-        return Product::with(['inventories' => fn ($query) => $query->forClinic($context)])
+        return Product::forClinic($context)->with(['inventories' => fn ($query) => $query->forClinic($context)])
             ->where('is_active', true)
             ->whereHas('inventories', function($query) use ($context) {
                 $query->forClinic($context)

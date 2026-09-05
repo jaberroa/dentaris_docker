@@ -8,20 +8,20 @@ use App\Http\Requests\Inventory\CreateInventoryAdjustmentRequest;
 use App\Http\Requests\Inventory\ExportInventoryRequest;
 use App\Http\Requests\Inventory\TransferInventoryRequest;
 use App\Models\Inventory;
-use App\Models\InventoryMovement;
 use App\Models\InventoryLocation;
+use App\Models\InventoryMovement;
 use App\Models\Product;
 use App\Models\Supplier;
-use App\Repositories\InventoryMovementRepository;
-use App\Repositories\InventoryExportRepository;
-use App\Services\InventoryMovementService;
 use App\Modules\Clinics\Data\ClinicContext;
+use App\Repositories\InventoryExportRepository;
+use App\Repositories\InventoryMovementRepository;
+use App\Services\InventoryMovementService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
-use Barryvdh\DomPDF\Facade\Pdf;
-use Maatwebsite\Excel\Facades\Excel;
 use InvalidArgumentException;
+use Maatwebsite\Excel\Facades\Excel;
 use RuntimeException;
 
 class InventoryController extends Controller
@@ -34,19 +34,25 @@ class InventoryController extends Controller
     public function index(Request $request)
     {
         $context = $this->clinicContext($request);
-        $query = Inventory::forClinic($context)->with(['product.primarySupplier', 'inventoryLocation']);
+        $query = Inventory::forClinic($context)
+            ->whereHas('product', fn ($query) => $query->forClinic($context))
+            ->with([
+                'product' => fn ($query) => $query->forClinic($context),
+                'product.primarySupplier' => fn ($query) => $query->forClinic($context),
+                'inventoryLocation',
+            ]);
 
         // Filtros
         if ($request->filled('search')) {
             $search = $request->search;
-            $query->whereHas('product', function($q) use ($search) {
+            $query->whereHas('product', function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('product_code', 'like', "%{$search}%");
+                    ->orWhere('product_code', 'like', "%{$search}%");
             });
         }
 
         if ($request->filled('category')) {
-            $query->whereHas('product', function($q) use ($request) {
+            $query->whereHas('product', function ($q) use ($request) {
                 $q->where('category', $request->category);
             });
         }
@@ -61,7 +67,7 @@ class InventoryController extends Controller
                     break;
                 case 'normal':
                     $query->whereRaw('available_stock > (SELECT minimum_stock FROM products WHERE products.id = inventory.product_id)')
-                          ->where('available_stock', '>', 0);
+                        ->where('available_stock', '>', 0);
                     break;
             }
         }
@@ -84,11 +90,12 @@ class InventoryController extends Controller
 
         // Datos para filtros
         $categories = Product::query()
+            ->forClinic($context)
             ->whereHas('inventories', fn ($query) => $query->forClinic($context))
             ->select('category')
             ->distinct()
             ->pluck('category');
-        $suppliers = Supplier::where('is_active', true)->get();
+        $suppliers = Supplier::forClinic($context)->where('is_active', true)->get();
         $transferDestinationsByProduct = Inventory::query()
             ->forClinic($context)
             ->with(['product:id,name', 'inventoryLocation:id,name'])
@@ -110,7 +117,10 @@ class InventoryController extends Controller
     {
         $context = $this->clinicContext($request);
         $inventory = $this->inventoryForContext($inventory, $context);
-        $inventory->load(['product.primarySupplier']);
+        $inventory->load([
+            'product' => fn ($query) => $query->forClinic($context),
+            'product.primarySupplier' => fn ($query) => $query->forClinic($context),
+        ]);
         $movements = $inventory->movements()
             ->forClinic($context)
             ->with('user')
@@ -176,8 +186,7 @@ class InventoryController extends Controller
         CreateInventoryAdjustmentRequest $request,
         Inventory $inventory,
         InventoryMovementService $movementService,
-    )
-    {
+    ) {
         $context = $request->clinicContext();
         abort_unless($context instanceof ClinicContext, 403, 'El contexto clínico no está disponible.');
         $inventory = $this->inventoryForContext($inventory, $context);
@@ -227,7 +236,7 @@ class InventoryController extends Controller
                 $request->user(),
                 $context,
             );
-        } catch (InvalidArgumentException | RuntimeException $exception) {
+        } catch (InvalidArgumentException|RuntimeException $exception) {
             throw ValidationException::withMessages(['quantity' => $exception->getMessage()]);
         }
 
@@ -255,8 +264,12 @@ class InventoryController extends Controller
             ->log('inventory.exported');
 
         $filename = 'inventario_'.now()->format('Y-m-d_H-i-s');
-        if ($format === 'xlsx') return Excel::download(new InventoryExport($filters, $context), $filename.'.xlsx');
-        if ($format === 'pdf') return Pdf::loadView('inventory.export-pdf', ['inventories' => $query->get(), 'filters' => $filters])->setPaper('A4', 'landscape')->download($filename.'.pdf');
+        if ($format === 'xlsx') {
+            return Excel::download(new InventoryExport($filters, $context), $filename.'.xlsx');
+        }
+        if ($format === 'pdf') {
+            return Pdf::loadView('inventory.export-pdf', ['inventories' => $query->get(), 'filters' => $filters])->setPaper('A4', 'landscape')->download($filename.'.pdf');
+        }
 
         return response()->streamDownload(function () use ($query): void {
             $output = fopen('php://output', 'w');
@@ -281,9 +294,12 @@ class InventoryController extends Controller
     public function lowStock(Request $request)
     {
         $context = $this->clinicContext($request);
-        $lowStockProducts = Inventory::forClinic($context)->with(['product.primarySupplier'])
-            ->whereHas('product', function($query) {
-                $query->where('is_active', true);
+        $lowStockProducts = Inventory::forClinic($context)->with([
+            'product' => fn ($query) => $query->forClinic($context),
+            'product.primarySupplier' => fn ($query) => $query->forClinic($context),
+        ])
+            ->whereHas('product', function ($query) use ($context) {
+                $query->forClinic($context)->where('is_active', true);
             })
             ->whereRaw('available_stock <= (SELECT minimum_stock FROM products WHERE products.id = inventory.product_id)')
             ->orderByRaw('available_stock - (SELECT minimum_stock FROM products WHERE products.id = inventory.product_id)')
@@ -295,9 +311,12 @@ class InventoryController extends Controller
     public function outOfStock(Request $request)
     {
         $context = $this->clinicContext($request);
-        $outOfStockProducts = Inventory::forClinic($context)->with(['product.primarySupplier'])
-            ->whereHas('product', function($query) {
-                $query->where('is_active', true);
+        $outOfStockProducts = Inventory::forClinic($context)->with([
+            'product' => fn ($query) => $query->forClinic($context),
+            'product.primarySupplier' => fn ($query) => $query->forClinic($context),
+        ])
+            ->whereHas('product', function ($query) use ($context) {
+                $query->forClinic($context)->where('is_active', true);
             })
             ->where('available_stock', 0)
             ->orderBy('product.name')
@@ -309,10 +328,10 @@ class InventoryController extends Controller
     public function expiringSoon(Request $request)
     {
         $context = $this->clinicContext($request);
-        $expiringProducts = Product::with([
-                'inventories' => fn ($query) => $query->forClinic($context),
-                'primarySupplier',
-            ])
+        $expiringProducts = Product::forClinic($context)->with([
+            'inventories' => fn ($query) => $query->forClinic($context),
+            'primarySupplier' => fn ($query) => $query->forClinic($context),
+        ])
             ->whereHas('inventories', fn ($query) => $query->forClinic($context))
             ->where('is_active', true)
             ->where('expiry_date', '<=', now()->addDays(30))
@@ -327,17 +346,18 @@ class InventoryController extends Controller
     {
         $context = $this->clinicContext($request);
         $stats = [
-            'total_products' => Product::where('is_active', true)
+            'total_products' => Product::forClinic($context)->where('is_active', true)
                 ->whereHas('inventories', fn ($query) => $query->forClinic($context))
                 ->count(),
             'low_stock_count' => Inventory::forClinic($context)->with('product')
-                ->whereHas('product', function($query) {
-                    $query->where('is_active', true);
+                ->whereHas('product', function ($query) use ($context) {
+                    $query->forClinic($context)->where('is_active', true);
                 })
                 ->whereRaw('available_stock <= (SELECT minimum_stock FROM products WHERE products.id = inventory.product_id)')
                 ->count(),
             'out_of_stock_count' => Inventory::forClinic($context)->where('available_stock', 0)->count(),
             'total_value' => Inventory::forClinic($context)->join('products', 'inventory.product_id', '=', 'products.id')
+                ->where('products.clinic_id', $context->clinicId)
                 ->where('products.is_active', true)
                 ->sum(DB::raw('current_stock * average_cost')),
         ];

@@ -8,12 +8,14 @@ class ClinicOwnedDomainReadinessService
 {
     /** @var array<string, list<string>> */
     private const DOMAIN_TABLES = [
-        'inventory' => ['inventory_locations', 'inventory', 'inventory_movements'],
+        'inventory' => ['products', 'inventory_locations', 'inventory', 'inventory_movements'],
         'billing' => ['invoices', 'payments'],
+        'procurement' => ['suppliers', 'products', 'purchases'],
+        'quotes' => ['quotes'],
     ];
 
     /** @var list<string> */
-    private const FAIL_CLOSED_DOMAINS = ['procurement'];
+    private const FAIL_CLOSED_DOMAINS = ['procurement', 'quotes'];
 
     public function __construct(
         private readonly ConnectionInterface $connection,
@@ -21,8 +23,8 @@ class ClinicOwnedDomainReadinessService
 
     public function isReady(string $domain): bool
     {
-        // Schema alone cannot open procurement: its controllers and bindings
-        // still need clinic-scoped policies in a separate mandate.
+        // Ownership and policies alone cannot open these legacy surfaces:
+        // their controllers, validation and views still need safe reconstruction.
         if (in_array($domain, self::FAIL_CLOSED_DOMAINS, true)) {
             return false;
         }
@@ -51,6 +53,14 @@ class ClinicOwnedDomainReadinessService
     private function relationsAreConsistent(string $domain): bool
     {
         if ($domain === 'inventory') {
+            $productMismatch = $this->connection->table('inventory as stock')
+                ->leftJoin('products as product', 'product.id', '=', 'stock.product_id')
+                ->where(function ($query): void {
+                    $query->whereNull('product.id')
+                        ->orWhereNull('product.clinic_id')
+                        ->orWhereColumn('product.clinic_id', '<>', 'stock.clinic_id');
+                })
+                ->exists();
             $locationMismatch = $this->connection->table('inventory as stock')
                 ->leftJoin('inventory_locations as location', 'location.id', '=', 'stock.inventory_location_id')
                 ->whereNotNull('stock.inventory_location_id')
@@ -70,7 +80,7 @@ class ClinicOwnedDomainReadinessService
                 })
                 ->exists();
 
-            return ! $locationMismatch && ! $movementMismatch;
+            return ! $productMismatch && ! $locationMismatch && ! $movementMismatch;
         }
 
         if ($domain === 'billing') {

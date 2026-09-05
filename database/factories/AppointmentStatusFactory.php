@@ -25,15 +25,9 @@ class AppointmentStatusFactory extends Factory
     public function definition(): array
     {
         return [
-            'name' => $this->faker->unique()->randomElement([
-                'scheduled',
-                'confirmed',
-                'in_progress',
-                'completed',
-                'cancelled',
-                'no_show',
-                'rescheduled'
-            ]),
+            // El estado genérico no debe competir con los estados canónicos
+            // creados explícitamente por cada prueba mediante sus states.
+            'name' => 'test_'.$this->faker->unique()->bothify('????????????'),
             'display_name' => $this->faker->words(2, true),
             'description' => $this->faker->optional(0.7)->sentence(),
             'color' => $this->faker->hexColor(),

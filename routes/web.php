@@ -311,39 +311,62 @@ Route::middleware(['auth', 'clinic.selection'])->group(function () {
         Route::delete('/lab-works/{labWork}', [LabWorkController::class, 'destroy'])->name('lab-works.destroy');
     });
     
-    // Gestión de Cotizaciones
-    Route::get('/quotes', [QuoteController::class, 'index'])->name('quotes.index');
-    Route::get('/quotes/{quote}', [QuoteController::class, 'show'])->name('quotes.show');
-    
-    Route::middleware('can:manage_quotes')->group(function () {
-        Route::get('/quotes/create', [QuoteController::class, 'create'])->name('quotes.create');
-        Route::post('/quotes', [QuoteController::class, 'store'])->name('quotes.store');
-        Route::get('/quotes/{quote}/edit', [QuoteController::class, 'edit'])->name('quotes.edit');
-        Route::put('/quotes/{quote}', [QuoteController::class, 'update'])->name('quotes.update');
-        Route::delete('/quotes/{quote}', [QuoteController::class, 'destroy'])->name('quotes.destroy');
+    // Cotizaciones permanecen cerradas hasta sanear su controlador y vistas heredadas.
+    Route::middleware(['clinic.context', 'clinic.domain.ready:quotes'])->group(function () {
+        Route::get('/quotes', [QuoteController::class, 'index'])
+            ->middleware('can:viewAny,App\Models\Quote')
+            ->name('quotes.index');
+        Route::get('/quotes/create', [QuoteController::class, 'create'])
+            ->middleware('can:create,App\Models\Quote')
+            ->name('quotes.create');
+        Route::post('/quotes', [QuoteController::class, 'store'])
+            ->middleware('can:create,App\Models\Quote')
+            ->name('quotes.store');
+        Route::get('/quotes/{quote}/edit', [QuoteController::class, 'edit'])
+            ->middleware('can:update,quote')
+            ->name('quotes.edit');
+        Route::put('/quotes/{quote}', [QuoteController::class, 'update'])
+            ->middleware('can:update,quote')
+            ->name('quotes.update');
+        Route::delete('/quotes/{quote}', [QuoteController::class, 'destroy'])
+            ->middleware('can:delete,quote')
+            ->name('quotes.destroy');
+        Route::get('/quotes/{quote}', [QuoteController::class, 'show'])
+            ->middleware('can:view,quote')
+            ->name('quotes.show');
     });
     
-    // Proveedores y compras permanecen cerrados hasta definir su propiedad clínica.
+    // Proveedores y compras permanecen cerrados hasta reconstruir sus controladores y vistas heredadas.
     Route::middleware(['clinic.context', 'clinic.domain.ready:procurement'])->group(function () {
-        Route::middleware('permission:view_inventory')->group(function () {
-            Route::get('/suppliers', [SupplierController::class, 'index'])->name('suppliers.index');
-            Route::get('/suppliers/{supplier}', [SupplierController::class, 'show'])->name('suppliers.show');
-            Route::get('/purchases', [PurchaseController::class, 'index'])->name('purchases.index');
-            Route::get('/purchases/{purchase}', [PurchaseController::class, 'show'])->name('purchases.show');
-        });
+        Route::get('/suppliers', [SupplierController::class, 'index'])
+            ->middleware('can:viewAny,App\Models\Supplier')->name('suppliers.index');
+        Route::get('/suppliers/create', [SupplierController::class, 'create'])
+            ->middleware('can:create,App\Models\Supplier')->name('suppliers.create');
+        Route::post('/suppliers', [SupplierController::class, 'store'])
+            ->middleware('can:create,App\Models\Supplier')->name('suppliers.store');
+        Route::get('/suppliers/{supplier}/edit', [SupplierController::class, 'edit'])
+            ->middleware('can:update,supplier')->name('suppliers.edit');
+        Route::put('/suppliers/{supplier}', [SupplierController::class, 'update'])
+            ->middleware('can:update,supplier')->name('suppliers.update');
+        Route::delete('/suppliers/{supplier}', [SupplierController::class, 'destroy'])
+            ->middleware('can:delete,supplier')->name('suppliers.destroy');
+        Route::get('/suppliers/{supplier}', [SupplierController::class, 'show'])
+            ->middleware('can:view,supplier')->name('suppliers.show');
 
-        Route::middleware('permission:manage_inventory')->group(function () {
-            Route::get('/suppliers/create', [SupplierController::class, 'create'])->name('suppliers.create');
-            Route::post('/suppliers', [SupplierController::class, 'store'])->name('suppliers.store');
-            Route::get('/suppliers/{supplier}/edit', [SupplierController::class, 'edit'])->name('suppliers.edit');
-            Route::put('/suppliers/{supplier}', [SupplierController::class, 'update'])->name('suppliers.update');
-            Route::delete('/suppliers/{supplier}', [SupplierController::class, 'destroy'])->name('suppliers.destroy');
-            Route::get('/purchases/create', [PurchaseController::class, 'create'])->name('purchases.create');
-            Route::post('/purchases', [PurchaseController::class, 'store'])->name('purchases.store');
-            Route::get('/purchases/{purchase}/edit', [PurchaseController::class, 'edit'])->name('purchases.edit');
-            Route::put('/purchases/{purchase}', [PurchaseController::class, 'update'])->name('purchases.update');
-            Route::delete('/purchases/{purchase}', [PurchaseController::class, 'destroy'])->name('purchases.destroy');
-        });
+        Route::get('/purchases', [PurchaseController::class, 'index'])
+            ->middleware('can:viewAny,App\Models\Purchase')->name('purchases.index');
+        Route::get('/purchases/create', [PurchaseController::class, 'create'])
+            ->middleware('can:create,App\Models\Purchase')->name('purchases.create');
+        Route::post('/purchases', [PurchaseController::class, 'store'])
+            ->middleware('can:create,App\Models\Purchase')->name('purchases.store');
+        Route::get('/purchases/{purchase}/edit', [PurchaseController::class, 'edit'])
+            ->middleware('can:update,purchase')->name('purchases.edit');
+        Route::put('/purchases/{purchase}', [PurchaseController::class, 'update'])
+            ->middleware('can:update,purchase')->name('purchases.update');
+        Route::delete('/purchases/{purchase}', [PurchaseController::class, 'destroy'])
+            ->middleware('can:delete,purchase')->name('purchases.destroy');
+        Route::get('/purchases/{purchase}', [PurchaseController::class, 'show'])
+            ->middleware('can:view,purchase')->name('purchases.show');
     });
     
     // Gestión de Tratamientos

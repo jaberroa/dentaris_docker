@@ -8,7 +8,10 @@ use App\Http\Controllers\AppointmentController;
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\MedicalRecordController;
 use App\Http\Controllers\PatientController;
+use App\Http\Controllers\PurchaseController;
+use App\Http\Controllers\QuoteController;
 use App\Http\Controllers\StaffController;
+use App\Http\Controllers\SupplierController;
 use App\Models\Patient;
 use App\Models\Staff;
 use App\Models\User;
@@ -114,11 +117,18 @@ class ClinicalRouteContractTest extends TestCase
 
     public function test_specific_create_routes_are_not_shadowed_by_model_routes(): void
     {
-        $patientRoute = Route::getRoutes()->match(Request::create('/patients/create', 'GET'));
-        $staffRoute = Route::getRoutes()->match(Request::create('/staff/create', 'GET'));
+        $expected = [
+            '/patients/create' => PatientController::class.'@create',
+            '/staff/create' => StaffController::class.'@create',
+            '/suppliers/create' => SupplierController::class.'@create',
+            '/purchases/create' => PurchaseController::class.'@create',
+            '/quotes/create' => QuoteController::class.'@create',
+        ];
 
-        $this->assertSame(PatientController::class.'@create', $patientRoute->getActionName());
-        $this->assertSame(StaffController::class.'@create', $staffRoute->getActionName());
+        foreach ($expected as $uri => $action) {
+            $route = Route::getRoutes()->match(Request::create($uri, 'GET'));
+            $this->assertSame($action, $route->getActionName(), $uri);
+        }
     }
 
     public function test_patient_api_routes_require_active_user_clinic_context_and_permissions(): void
@@ -169,6 +179,8 @@ class ClinicalRouteContractTest extends TestCase
             'suppliers.store' => 'clinic.domain.ready:procurement',
             'purchases.index' => 'clinic.domain.ready:procurement',
             'purchases.store' => 'clinic.domain.ready:procurement',
+            'quotes.index' => 'clinic.domain.ready:quotes',
+            'quotes.store' => 'clinic.domain.ready:quotes',
         ];
 
         foreach ($domains as $name => $readiness) {
