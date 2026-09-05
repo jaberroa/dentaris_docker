@@ -28,11 +28,10 @@ class Authenticate
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json([
                 'error' => 'Unauthorized',
-                'message' => 'Debes iniciar sesión para acceder a este recurso'
+                'message' => 'Debes iniciar sesión para acceder a este recurso',
             ], 401);
         }
 
-        // Redirigir al login con mensaje específico
-        return redirect()->route('login')->with('error', 'Debes iniciar sesión para acceder a esta página. Usa las credenciales: admin@dentaris.com / password');
+        return redirect()->route('login')->with('error', 'Debes iniciar sesión para acceder a esta página.');
     }
 }

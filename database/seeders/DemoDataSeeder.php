@@ -2,20 +2,16 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
-use Illuminate\Database\Seeder;
-use App\Models\User;
-use App\Models\Role;
-use App\Models\Patient;
-use App\Models\Staff;
-use App\Models\Appointment;
-use App\Models\AppointmentStatus;
-use App\Models\Supplier;
-use App\Models\Product;
 use App\Models\Inventory;
-use App\Models\DentalLab;
-use App\Models\Prosthesis;
+use App\Models\Patient;
+use App\Models\Product;
+use App\Models\Role;
+use App\Models\Staff;
+use App\Models\Supplier;
+use App\Models\User;
+use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class DemoDataSeeder extends Seeder
 {
@@ -25,13 +21,13 @@ class DemoDataSeeder extends Seeder
         $adminRole = Role::where('name', 'admin')->first();
         $dentistRole = Role::where('name', 'dentist')->first();
 
-        // Crear usuarios (usar updateOrCreate para evitar duplicados)
-        $admin = User::updateOrCreate(
+        // Crear usuarios solo si faltan; nunca sobrescribir identidades existentes.
+        $admin = User::firstOrCreate(
             ['email' => 'admin@dentaris.com'],
             [
                 'name' => 'Dr. Juan Pérez',
                 'email' => 'admin@dentaris.com',
-                'password' => Hash::make('password'),
+                'password' => Hash::make(Str::password(32)),
                 'phone' => '+1234567890',
                 'gender' => 'male',
                 'specialty' => 'Odontología General',
@@ -41,12 +37,12 @@ class DemoDataSeeder extends Seeder
         );
         $admin->roles()->syncWithoutDetaching([$adminRole->id]);
 
-        $dentist = User::updateOrCreate(
+        $dentist = User::firstOrCreate(
             ['email' => 'dentist@dentaris.com'],
             [
                 'name' => 'Dra. María González',
                 'email' => 'dentist@dentaris.com',
-                'password' => Hash::make('password'),
+                'password' => Hash::make(Str::password(32)),
                 'phone' => '+1234567891',
                 'gender' => 'female',
                 'specialty' => 'Endodoncia',

@@ -58,21 +58,6 @@
             margin: 8px 0;
             color: #6b7280;
         }
-        .credentials {
-            background: #e3f2fd;
-            padding: 20px;
-            border-radius: 8px;
-            margin: 20px 0;
-            text-align: left;
-        }
-        .credentials h4 {
-            margin: 0 0 10px 0;
-            color: #1976d2;
-        }
-        .credentials p {
-            margin: 5px 0;
-            color: #424242;
-        }
         .btn {
             display: inline-block;
             background: #667eea;
@@ -107,16 +92,10 @@
             <h4>Pasos para acceder:</h4>
             <ol>
                 <li>Haz clic en "Iniciar Sesión"</li>
-                <li>Ingresa las credenciales de prueba</li>
-                <li>Una vez logueado, podrás acceder a todos los módulos</li>
+                <li>Ingresa tus credenciales personales</li>
+                <li>Una vez autenticado, podrás acceder solo a los módulos autorizados</li>
                 <li>Navega desde el dashboard a cualquier sección</li>
             </ol>
-        </div>
-        
-        <div class="credentials">
-            <h4>Credenciales de prueba:</h4>
-            <p><strong>Correo:</strong> admin@dentaris.com</p>
-            <p><strong>Contraseña:</strong> password</p>
         </div>
         
         <a href="{{ route('login') }}" class="btn">Iniciar Sesión</a>

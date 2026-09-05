@@ -141,10 +141,14 @@ El navegador quedó sin errores de consola después de montar los assets correct
 
 ## Seguimiento: Mandato 14A
 
-El Mandato 14A implementó y probó el mecanismo de transición y la carga QA idempotente, pero el dry-run real confirmó que la migración nullable sigue pendiente y que el actor visual carece de los dos permisos de pagos. No se ejecutaron migraciones ni se crearon datos QA. La evidencia detallada está en `PHASE-1-MANDATE-14A-OWNERSHIP-TRANSITION-AND-QA-DENTARIS.md`.
+El Mandato 14A implementó y probó el mecanismo de transición y la carga QA idempotente, pero su dry-run real confirmó que la migración nullable estaba pendiente y que el actor visual carecía de los dos permisos de pagos. En ese mandato no se ejecutaron migraciones ni se crearon datos QA. La evidencia detallada está en `PHASE-1-MANDATE-14A-OWNERSHIP-TRANSITION-AND-QA-DENTARIS.md`.
+
+## Seguimiento: Mandato 14B
+
+El Mandato 14B respaldó la base, aplicó exclusivamente la migración nullable, verificó claves foráneas e índices, añadió los dos permisos clínicos de pagos, ejecutó dos veces la transición y creó datos QA idempotentes. Inventario, facturación y pagos quedaron preparados para la clínica `DEN-CL-001`; proveedores y compras continúan cerrados. La evidencia detallada está en `PHASE-1-MANDATE-14B-DATA-ENABLEMENT-AND-VISUAL-VALIDATION-DENTARIS.md`.
 
 ## Siguiente mandato recomendado
 
-**Mandato 14B — ejecución autorizada de esquema y habilitación QA.** Debe aplicar exclusivamente la migración nullable ya revisada, verificar estructura, ejecutar la transición idempotente, añadir los permisos clínicos de pagos de forma trazable, crear los cinco registros QA por vista y realizar la validación visual.
+**Mandato 14C — propiedad clínica de proveedores/compras y saneamiento de regresión.** Debe decidir si proveedores y productos son catálogos compartidos o entidades clínicas, diseñar la migración/backfill sin inferencias dudosas y corregir primero factories de citas y pruebas de pacientes que aún omiten contexto.
 
-Modelo recomendado: `gpt-5.6-sol`. Esfuerzo recomendado: `high`, elevable a `xhigh` si el inventario revela asignaciones ambiguas o múltiples clínicas candidatas.
+Modelo recomendado: `gpt-5.6-sol`. Esfuerzo recomendado: `xhigh`.

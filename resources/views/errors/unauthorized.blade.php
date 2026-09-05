@@ -57,21 +57,6 @@
         .btn-secondary:hover {
             background: #4b5563;
         }
-        .credentials {
-            background: #f3f4f6;
-            padding: 20px;
-            border-radius: 5px;
-            margin: 20px 0;
-            text-align: left;
-        }
-        .credentials h4 {
-            margin: 0 0 10px 0;
-            color: #374151;
-        }
-        .credentials p {
-            margin: 5px 0;
-            color: #6b7280;
-        }
     </style>
 </head>
 <body>
@@ -81,12 +66,6 @@
         <p class="message">
             Para acceder a esta página, necesitas iniciar sesión en el sistema Dentaris.
         </p>
-        
-        <div class="credentials">
-            <h4>Credenciales de prueba:</h4>
-            <p><strong>Correo:</strong> admin@dentaris.com</p>
-            <p><strong>Contraseña:</strong> password</p>
-        </div>
         
         <a href="{{ route('login') }}" class="btn">Iniciar Sesión</a>
         <a href="{{ url('/') }}" class="btn btn-secondary">Volver al Inicio</a>

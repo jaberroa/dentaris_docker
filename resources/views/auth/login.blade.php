@@ -104,100 +104,6 @@
             margin-top: 0.5rem;
         }
         
-        .test-accounts {
-            margin-top: 2rem;
-            padding: 1rem;
-            background: #f3f4f6;
-            border-radius: 6px;
-        }
-        
-        .test-accounts h3 {
-            color: #374151;
-            font-size: 0.875rem;
-            margin-bottom: 0.5rem;
-        }
-        
-        .test-accounts p {
-            color: #6b7280;
-            font-size: 0.75rem;
-            margin-bottom: 0.25rem;
-        }
-        
-        .test-accounts h4 {
-            color: #374151;
-            font-size: 0.8rem;
-            margin: 1rem 0 0.5rem 0;
-            border-top: 1px solid #d1d5db;
-            padding-top: 0.5rem;
-        }
-        
-        .quick-access {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-            margin-bottom: 1rem;
-        }
-        
-        .quick-access.doctors {
-            gap: 0.3rem;
-        }
-        
-        .quick-btn {
-            flex: 1;
-            min-width: 80px;
-            padding: 0.5rem 0.75rem;
-            border: 2px solid transparent;
-            border-radius: 6px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            text-align: center;
-        }
-        
-        .quick-btn.admin {
-            background: #dc2626;
-            color: white;
-        }
-        
-        .quick-btn.admin:hover {
-            background: #b91c1c;
-            transform: translateY(-1px);
-        }
-        
-        .quick-btn.doctor {
-            background: #059669;
-            color: white;
-        }
-        
-        .quick-btn.doctor:hover {
-            background: #047857;
-            transform: translateY(-1px);
-        }
-        
-        .quick-btn.reception {
-            background: #7c3aed;
-            color: white;
-        }
-        
-        .quick-btn.reception:hover {
-            background: #6d28d9;
-            transform: translateY(-1px);
-        }
-        
-        .quick-btn.specialty {
-            background: #2563eb;
-            color: white;
-            min-width: 60px;
-            font-size: 0.7rem;
-            padding: 0.4rem 0.5rem;
-        }
-        
-        .quick-btn.specialty:hover {
-            background: #1d4ed8;
-            transform: translateY(-1px);
-        }
-        
         .loading {
             display: none;
         }
@@ -263,41 +169,6 @@
             <div class="success">{{ session('status') }}</div>
         @endif
         
-        <div class="test-accounts">
-            <h3>🧪 Acceso Rápido</h3>
-            
-            <!-- Botones de acceso rápido -->
-            <div class="quick-access">
-                <button class="quick-btn admin" onclick="quickLogin('admin@dentaris.com', 'password')">
-                    👑 Admin
-                </button>
-                <button class="quick-btn doctor" onclick="quickLogin('dentist@dentaris.com', 'password')">
-                    🦷 Odontólogo
-                </button>
-                <button class="quick-btn reception" onclick="quickLogin('reception@dentaris.com', 'password')">
-                    📞 Recepcionista
-                </button>
-            </div>
-            
-            <h4>👨‍⚕️ Doctores Especializados</h4>
-            <div class="quick-access doctors">
-                <button class="quick-btn specialty" onclick="quickLogin('carlos.mendoza@dentaris.com', 'password123')">
-                    🔬 Endodoncia
-                </button>
-                <button class="quick-btn specialty" onclick="quickLogin('ana.silva@dentaris.com', 'password123')">
-                    🦷 Periodoncia
-                </button>
-                <button class="quick-btn specialty" onclick="quickLogin('roberto.herrera@dentaris.com', 'password123')">
-                    ⚕️ Cirugía Oral
-                </button>
-                <button class="quick-btn specialty" onclick="quickLogin('laura.vega@dentaris.com', 'password123')">
-                    🦷 Prótesis
-                </button>
-                <button class="quick-btn specialty" onclick="quickLogin('miguel.torres@dentaris.com', 'password123')">
-                    👶 Odontopediatría
-                </button>
-            </div>
-        </div>
     </div>
     
     <script>
@@ -311,22 +182,6 @@
             btnText.textContent = 'Iniciando sesión...';
         });
         
-        function quickLogin(email, password) {
-            // Llenar los campos automáticamente
-            document.getElementById('email').value = email;
-            document.getElementById('password').value = password;
-            
-            // Mostrar feedback visual
-            const btn = document.getElementById('submitBtn');
-            const btnText = document.getElementById('btnText');
-            btnText.textContent = 'Acceso rápido...';
-            btn.style.background = '#059669';
-            
-            // Enviar formulario después de un breve delay para mostrar el feedback
-            setTimeout(() => {
-                document.getElementById('loginForm').submit();
-            }, 300);
-        }
     </script>
 </body>
 </html>

@@ -102,9 +102,7 @@ class SeedDentalData extends Command
         $this->info('   - Estados de citas');
         $this->info('   - Catálogo CDT');
         $this->info('');
-        $this->info('🔑 Credenciales por defecto:');
-        $this->info('   Email: admin@dentaris.com');
-        $this->info('   Contraseña: password');
+        $this->info('🔑 Las contraseñas no se muestran; usa el flujo de restablecimiento para habilitar una cuenta nueva.');
         $this->info('');
         $this->info('🌐 Accede a: http://localhost:8000/login');
     }
